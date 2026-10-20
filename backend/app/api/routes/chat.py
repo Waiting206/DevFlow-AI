@@ -27,7 +27,7 @@ from app.services.code_search import query_terms, search_checkout_code
 from app.services.conversations import ensure_conversation, touch_conversation
 from app.services.memory_hub import record_recall_event
 from app.services.mcp_client import StdioMcpClient
-from app.services.rag.retrieval import search_similar_documents
+from app.services.rag.agent_retrieval import AgentKnowledgeRetriever, investigation_hint
 from app.services.rag.vector_store import add_document
 from app.schemas.workflow import WorkflowSpec, WorkflowTask, WorkflowTaskResult
 from app.services.skills import SkillRegistry, get_skill_registry
@@ -338,7 +338,7 @@ def _repo_health_answer(repo: Repository, issues: list[Issue], prs: list[PullReq
     )
 
 
-def _semantic_search(repo: Repository, message: str, context: dict[str, Any], db: Session) -> tuple[str, list[dict[str, str]], list[dict[str, Any]]]:
+async def _semantic_search(repo: Repository, message: str, context: dict[str, Any], db: Session, *, retriever: AgentKnowledgeRetriever | None = None) -> tuple[str, list[dict[str, str]], list[dict[str, Any]], dict[str, Any]]:
     filters = {
         "label": context.get("label"),
         "path": context.get("path"),
@@ -347,16 +347,18 @@ def _semantic_search(repo: Repository, message: str, context: dict[str, Any], db
         "start_date": context.get("start_date"),
         "end_date": context.get("end_date"),
     }
-    results = search_similar_documents(
-        db,
+    source_type = context.get("source_type") or _source_type_from_message(message)
+    retrieved = await (retriever or AgentKnowledgeRetriever(db)).search(
         repo.id,
         message,
-        source_type=context.get("source_type") or _source_type_from_message(message),
-        limit=int(context.get("limit", 5)),
+        source_types=[source_type] if source_type else None,
+        top_k=int(context["limit"]) if context.get("limit") else None,
         metadata_filters={key: value for key, value in filters.items() if value},
     )
+    results, trace = retrieved.items, retrieved.trace
+    hint = investigation_hint(trace)
     if not results:
-        return "没有找到足够相似的历史记录。可以尝试放宽标签、路径或时间过滤条件。", [], []
+        return "没有找到足够相似的历史记录。\n" + hint, [], [], trace
     lines = ["找到以下相关历史记录："]
     citations: list[dict[str, str]] = []
     for index, item in enumerate(results, start=1):
@@ -368,7 +370,7 @@ def _semantic_search(repo: Repository, message: str, context: dict[str, Any], db
         if snippet:
             lines.append(f"  证据：{snippet}")
         citations.append({"type": item["source_type"], "id": item["source_id"], "title": item["title"]})
-    return "\n".join(lines), citations, results
+    return "\n".join([*lines, "", hint]), citations, results, trace
 
 
 def _checkout_root() -> Path:
@@ -832,7 +834,7 @@ def _build_engineering_workflow_runtime(
 
     async def run_rag_task(task: WorkflowTask, spec: WorkflowSpec, workflow_context: dict[str, Any]) -> WorkflowTaskResult:
         query = message or spec.goal
-        answer, citations, results = _semantic_search(repo, query, safe_context, db)
+        answer, citations, results, retrieval_trace = await _semantic_search(repo, query, safe_context, db)
         record_recall_event(
             db,
             repo_id=repo.id,
@@ -843,7 +845,7 @@ def _build_engineering_workflow_runtime(
             citations=citations,
             scope="project",
             mode="hybrid",
-            metadata={"route": "workflow_rag_task", "task_id": task.id},
+            metadata={"route": "workflow_rag_task", "task_id": task.id, "retrieval": retrieval_trace},
         )
         return WorkflowTaskResult(
             task_id=task.id,
@@ -851,7 +853,7 @@ def _build_engineering_workflow_runtime(
             task_type=task.task_type,
             status="success",
             summary=f"Retrieved {len(citations)} related historical records.",
-            output={"answer": answer, "citations": citations},
+            output={"answer": answer, "citations": citations, "retrieval_trace": retrieval_trace},
             evidence_count=len(citations),
             confidence=0.68 if citations else 0.45,
             citations=citations,
@@ -932,8 +934,9 @@ def _persist_engineering_workflow(
     return workflow.id
 
 
-def _build_conversation_tools(repo: Repository | None, conversation: Conversation | None, db: Session) -> dict[str, Any]:
+def _build_conversation_tools(repo: Repository | None, conversation: Conversation | None, db: Session, retriever: AgentKnowledgeRetriever | None = None) -> dict[str, Any]:
     mcp_client = StdioMcpClient()
+    retriever = retriever or AgentKnowledgeRetriever(db)
 
     def agent_context(context: dict[str, Any]) -> dict[str, Any]:
         return {key: value for key, value in context.items() if key not in {"tools", "_skill_registry"}}
@@ -952,11 +955,15 @@ def _build_conversation_tools(repo: Repository | None, conversation: Conversatio
             for item in result.get("content", [])
             if isinstance(item, dict) and item.get("type") == "text"
         ]
+        structured = result.get("structuredContent")
+        structured = structured if isinstance(structured, dict) else {}
+        retrieval_data = {key: structured[key] for key in ("retrieval_results", "retrieval_trace", "answer_gate", "citations") if key in structured}
         return {
             "route": tool_name.replace("devflow_", ""),
             "tool_calls": [{"tool_name": tool_name, "arguments": arguments, "status": "success"}],
             "answer": "\n".join(text_parts).strip(),
             "citations": [],
+            **retrieval_data,
         }
 
     async def search_evidence_mcp(input_data: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -1048,7 +1055,7 @@ def _build_conversation_tools(repo: Repository | None, conversation: Conversatio
         query = str(input_data.get("query") or original_message).strip()
         if not query:
             raise ValueError("query 为必填项")
-        answer, citations, results = _semantic_search(repo, query, context, db)
+        answer, citations, results, retrieval_trace = await _semantic_search(repo, query, context, db, retriever=retriever)
         record_recall_event(
             db,
             repo_id=repo.id,
@@ -1064,10 +1071,13 @@ def _build_conversation_tools(repo: Repository | None, conversation: Conversatio
                 "limit": context.get("limit", 5),
                 "original_message": original_message,
                 "query_rewritten": bool(original_message and query != original_message),
+                "retrieval": retrieval_trace,
             },
         )
         return {
             "route": "semantic_search",
+            "retrieval_trace": retrieval_trace,
+            "answer_gate": retrieval_trace.get("answer_gate") or {},
             "tool_calls": [
                 {
                     "tool_name": "rag.search_similar_documents",
@@ -1483,14 +1493,15 @@ async def _conversation_plan_execute_sse(payload: ChatPlanExecuteRequest, db: Se
     conversation = ensure_conversation(db, repo.id, payload.conversation_id)
     if conversation:
         db.commit()
-    compaction_stats = await ProgressiveContextManager(db).ensure_headroom(repo, conversation, payload.message)
+    retriever = AgentKnowledgeRetriever(db)
+    compaction_stats = await ProgressiveContextManager(db, retriever=retriever).ensure_headroom(repo, conversation, payload.message)
     if compaction_stats.get("attempted"):
         db.commit()
     message_store = MessageStore(db)
     user_message = message_store.append(repo_id=repo.id, conversation_id=conversation.id, role="user", content=payload.message)
     EvidenceStore(db).rebuild_repo(repo, conversation)
     db.commit()
-    assembled = ContextAssembler(db).assemble(repo, conversation, payload.message)
+    assembled = await ContextAssembler(db, retriever).assemble(repo, conversation, payload.message)
     context = {
         **_client_context(payload.context),
         **_skill_runtime_context(),
@@ -1607,14 +1618,15 @@ async def _conversation_response(payload: ChatRequest, db: Session) -> dict[str,
     repo = _repo_or_404(db, payload.repo_id)
     conversation = ensure_conversation(db, repo.id, payload.conversation_id)
     db.commit()
-    compaction_stats = await ProgressiveContextManager(db).ensure_headroom(repo, conversation, payload.message)
+    retriever = AgentKnowledgeRetriever(db)
+    compaction_stats = await ProgressiveContextManager(db, retriever=retriever).ensure_headroom(repo, conversation, payload.message)
     if compaction_stats.get("attempted"):
         db.commit()
     message_store = MessageStore(db)
     user_message = message_store.append(repo_id=repo.id, conversation_id=conversation.id, role="user", content=payload.message)
     EvidenceStore(db).rebuild_repo(repo, conversation)
     db.commit()
-    assembled = ContextAssembler(db).assemble(repo, conversation, payload.message)
+    assembled = await ContextAssembler(db, retriever).assemble(repo, conversation, payload.message)
     context = {
         **_client_context(payload.context),
         **_skill_runtime_context(),
@@ -1626,7 +1638,7 @@ async def _conversation_response(payload: ChatRequest, db: Session) -> dict[str,
         "compression_stats": assembled.compression_stats,
         "progressive_compaction": compaction_stats,
     }
-    context["tools"] = _build_conversation_tools(repo, conversation, db)
+    context["tools"] = _build_conversation_tools(repo, conversation, db, retriever)
     result = await ChatAgent().run({"message": payload.message}, context)
     run_id = uuid.uuid4()
     result["run_id"] = str(run_id)
@@ -1671,14 +1683,15 @@ async def _conversation_sse(payload: ChatRequest, db: Session):
     repo = _repo_or_404(db, payload.repo_id)
     conversation = ensure_conversation(db, repo.id, payload.conversation_id)
     db.commit()
-    compaction_stats = await ProgressiveContextManager(db).ensure_headroom(repo, conversation, payload.message)
+    retriever = AgentKnowledgeRetriever(db)
+    compaction_stats = await ProgressiveContextManager(db, retriever=retriever).ensure_headroom(repo, conversation, payload.message)
     if compaction_stats.get("attempted"):
         db.commit()
     message_store = MessageStore(db)
     user_message = message_store.append(repo_id=repo.id, conversation_id=conversation.id, role="user", content=payload.message)
     EvidenceStore(db).rebuild_repo(repo, conversation)
     db.commit()
-    assembled = ContextAssembler(db).assemble(repo, conversation, payload.message)
+    assembled = await ContextAssembler(db, retriever).assemble(repo, conversation, payload.message)
     context = {
         **_client_context(payload.context),
         **_skill_runtime_context(),
@@ -1690,7 +1703,7 @@ async def _conversation_sse(payload: ChatRequest, db: Session):
         "compression_stats": assembled.compression_stats,
         "progressive_compaction": compaction_stats,
     }
-    context["tools"] = _build_conversation_tools(repo, conversation, db)
+    context["tools"] = _build_conversation_tools(repo, conversation, db, retriever)
     try:
         async for event in ChatAgent().run_stream({"message": payload.message}, context):
             if event["event"] == "final":

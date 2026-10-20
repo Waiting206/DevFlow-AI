@@ -1,3 +1,4 @@
+import asyncio
 import importlib.util
 import time
 import uuid
@@ -228,9 +229,13 @@ async def retrieve_knowledge(
     score_threshold: float | None = None,
     source_types: list[str] | None = None,
     metadata_filters: dict[str, Any] | None = None,
+    policy: str = "qa",
+    commit_config: bool = True,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], int]:
     started = time.perf_counter()
-    config = get_or_create_config(db, repo_id)
+    if policy not in {"qa", "agent"}:
+        raise ValueError(f"Unsupported retrieval policy: {policy}")
+    config = get_or_create_config(db, repo_id, commit=commit_config)
     resolved_top_k = min(max(top_k or config.top_k, 1), 20)
     method = retrieval_method or config.retrieval_method
     use_rerank = config.rerank_enabled if rerank_enabled is None else rerank_enabled
@@ -244,7 +249,10 @@ async def retrieve_knowledge(
     )
     query_embedding = None
     if method in {"vector", "hybrid"} and has_vector_sources:
-        query_embedding = embed_knowledge_query(
+        # Only model/HTTP embedding work leaves the event loop; the database
+        # session remains on the calling thread.
+        query_embedding = await asyncio.to_thread(
+            embed_knowledge_query,
             query,
             provider=config.embedding_provider,
             model=config.embedding_model,
@@ -340,12 +348,18 @@ async def retrieve_knowledge(
     for item in items:
         retrieval = dict(item.get("retrieval") or {})
         retrieval["answer_gate"] = gate["decision"]
-        retrieval["selected_for_context"] = gate["decision"] == "answer"
+        retrieval["selected_for_context"] = policy == "agent" or gate["decision"] == "answer"
+        if policy == "agent":
+            retrieval["evidence_usage"] = "evidence" if gate["decision"] == "answer" else "investigation_lead"
         item["retrieval"] = retrieval
     pipeline_trace["stages"].append({"name": "answer_gate", **gate})
     duration_ms = round((time.perf_counter() - started) * 1000)
     trace = {
         **config_dict(config),
+        "retrieval_method": method,
+        "rerank_enabled": use_rerank,
+        "score_threshold_enabled": threshold_on,
+        "score_threshold": threshold,
         "top_k": resolved_top_k,
         "source_types": requested_source_types,
         "filters": {
@@ -357,6 +371,10 @@ async def retrieve_knowledge(
         "fusion_method": "weighted" if method == "hybrid" else method,
         "context_budget_tokens": context_budget_tokens,
         "answer_gate": gate,
+        "policy": policy,
+        "status": "degraded" if any(stage.get("fallback") or stage.get("status") == "unavailable" for stage in pipeline_trace.get("stages", [])) else "ok",
+        "duration_ms": duration_ms,
+        "gate_terminal": policy == "qa",
         "pipeline": pipeline_trace,
     }
     return items, trace, duration_ms

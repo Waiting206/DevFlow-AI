@@ -95,14 +95,14 @@ def _fallback_project_documents(db: Session, repo_id: UUID) -> list[dict]:
     ]
 
 
-def _conversation_evidence(db: Session, run: WorkflowRun, conversation_id: UUID | None, query: str) -> list[dict]:
+async def _conversation_evidence(db: Session, run: WorkflowRun, conversation_id: UUID | None, query: str) -> list[dict]:
     if not conversation_id:
         return []
     conversation = db.get(Conversation, conversation_id)
     if conversation is None or conversation.repo_id != run.repo_id:
         return []
     repo = db.get(Repository, run.repo_id)
-    assembled = ContextAssembler(db).assemble(repo, conversation, query, limit=8)
+    assembled = await ContextAssembler(db).assemble(repo, conversation, query, limit=8)
     evidence = _document_evidence(assembled.evidence, "conversation")
     if assembled.system_context.strip():
         evidence.append(
@@ -308,7 +308,7 @@ def _augment_ci_context_with_snapshot(db: Session, run: WorkflowRun, query: str,
     counts["code"] = len(context["code_references"])
 
 
-def _build_ci_analysis_context(db: Session, run: WorkflowRun, conversation_id: UUID | None = None) -> tuple[str, dict, dict]:
+async def _build_ci_analysis_context(db: Session, run: WorkflowRun, conversation_id: UUID | None = None) -> tuple[str, dict, dict]:
     repo = db.get(Repository, run.repo_id)
     first_error = _first_error(run.logs_text)
     failed_jobs = _failed_jobs(run)
@@ -361,7 +361,7 @@ def _build_ci_analysis_context(db: Session, run: WorkflowRun, conversation_id: U
             .all()
         )
     ]
-    chat_evidence = _conversation_evidence(db, run, conversation_id, semantic_query)
+    chat_evidence = await _conversation_evidence(db, run, conversation_id, semantic_query)
     context = {
         "repo_id": str(run.repo_id),
         "plan": _ci_plan(),
@@ -474,7 +474,7 @@ async def _ci_analysis_sse(run_id: UUID, conversation_id: UUID | None, db: Sessi
                 str(snapshot.get("message") or f"状态：{snapshot.get('status')}；代码图符号：{snapshot.get('indexed_symbols') or 0}。"),
             ),
         )
-        _query, context, counts = _build_ci_analysis_context(db, run, conversation_id)
+        _query, context, counts = await _build_ci_analysis_context(db, run, conversation_id)
         _augment_ci_context_with_snapshot(db, run, _query, context, counts, snapshot)
         context["plan"] = plan
         failed_job_names = [str(job.get("name")) for job in context.get("failed_jobs", []) if job.get("name")]
@@ -536,7 +536,7 @@ async def analyze_workflow_run(
         raise HTTPException(status_code=404, detail="未找到 workflow 运行")
     agent = CIDebugAgent()
     snapshot = _prepare_ci_pr_snapshot(db, run, enabled=use_pr_snapshot)
-    _query, context, counts = _build_ci_analysis_context(db, run, conversation_id)
+    _query, context, counts = await _build_ci_analysis_context(db, run, conversation_id)
     _augment_ci_context_with_snapshot(db, run, _query, context, counts, snapshot)
     result = await agent.run(_workflow_payload(run), context)
     analysis = _persist_ci_analysis(db, run, result, agent.llm.model, conversation_id, counts)

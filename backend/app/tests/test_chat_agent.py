@@ -682,12 +682,13 @@ async def test_conversation_rag_tool_prefers_agent_rewritten_query(monkeypatch) 
     conversation = SimpleNamespace(id=uuid.uuid4())
     captured: dict[str, Any] = {}
 
-    def fake_semantic_search(repo_arg, query, context, db):
+    async def fake_semantic_search(repo_arg, query, context, db, **kwargs):
         captured["search_query"] = query
         return (
             "rewritten evidence",
             [{"type": "project_doc", "id": "doc-1", "title": "Retry policy"}],
             [{"source_type": "project_doc", "source_id": "doc-1", "title": "Retry policy"}],
+            {"policy": "agent", "answer_gate": {"decision": "answer"}},
         )
 
     def fake_record_recall_event(*args, **kwargs):

@@ -50,9 +50,8 @@ from app.services.context_compression import (
 from app.services.llm.client import LLMClient
 from app.services.memory_hub import capture_memory_candidates, record_recall_event
 from app.services.rag.indexing import CI_LOG_CHUNK_CHARS, sanitize_ci_log
-from app.services.rag.retrieval import search_similar_documents
+from app.services.rag.agent_retrieval import AgentKnowledgeRetriever, investigation_hint
 from app.services.rag.source_policy import RAG_SOURCE_TYPES
-from app.services.rag.vector_store import MilvusUnavailableError
 
 
 def _repo_filter(model: Any, repo_id: uuid.UUID | None) -> Any:
@@ -271,8 +270,10 @@ class MessageStore:
 
 
 class EvidenceStore:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, retriever: AgentKnowledgeRetriever | None = None) -> None:
         self.db = db
+        self.retriever = retriever or AgentKnowledgeRetriever(db)
+        self.retrieval_trace: dict[str, Any] = {}
 
     def rebuild_repo(self, repo: Repository | None, conversation: Conversation | None = None) -> None:
         repo_id = repo.id if repo else None
@@ -367,46 +368,34 @@ class EvidenceStore:
             self._add(repo_id, conversation_id, "agent_run", str(run.id), f"Agent run: {run.route}", f"{run.user_message}\n{run.final_answer}", {"route": run.route})
         self.db.flush()
 
-    def search(self, repo_id: uuid.UUID | None, conversation_id: uuid.UUID | None, query: str, limit: int = 5) -> list[dict[str, Any]]:
+    async def search(self, repo_id: uuid.UUID | None, conversation_id: uuid.UUID | None, query: str, limit: int = 5, *, rag_top_k: int | None = None) -> list[dict[str, Any]]:
         query_terms = _tokens(query)
+        self.retrieval_trace = {}
         if not query_terms:
             return []
+        limit = min(max(limit, 1), 30)
         results: list[dict[str, Any]] = []
         seen: set[tuple[str, str]] = set()
         if repo_id:
-            try:
-                rag_results = search_similar_documents(
-                    self.db,
-                    repo_id,
-                    query,
-                    source_type=None,
-                    limit=max(limit, 8),
-                )
-            except MilvusUnavailableError:
-                rag_results = []
-            for item in rag_results:
+            retrieved = await self.retriever.search(repo_id, query, top_k=rag_top_k)
+            self.retrieval_trace = dict(retrieved.trace)
+            for item in retrieved.items:
                 key = (str(item.get("source_type") or ""), str(item.get("source_id") or ""))
                 if key in seen:
                     continue
                 seen.add(key)
-                results.append(
-                    {
-                        "title": item.get("title") or "",
-                        "source_type": item.get("source_type") or "",
-                        "source_id": item.get("source_id") or "",
-                        "snippet": item.get("snippet") or "",
-                        "score": item.get("score") or 0,
-                        "metadata": item.get("metadata") or {},
-                        "retrieval": item.get("retrieval") or {},
-                    }
-                )
+                results.append(dict(item))
                 if len(results) >= limit:
-                    return results
+                    break
+        rag_count = len(results)
+        # Only conversation memory can supplement RAG. Project documents that
+        # failed thresholds must not re-enter via the old EvidenceItem fallback.
         candidates = (
             self.db.query(EvidenceItem)
             .filter(
                 _repo_filter(EvidenceItem, repo_id),
                 or_(EvidenceItem.conversation_id == conversation_id, EvidenceItem.conversation_id.is_(None)),
+                EvidenceItem.source_type.in_(["memory", "session", "agent_run"]),
             )
             .order_by(EvidenceItem.created_at.desc())
             .limit(500)
@@ -414,8 +403,7 @@ class EvidenceStore:
         )
         ranked: list[tuple[int, EvidenceItem]] = []
         for item in candidates:
-            key = (item.source_type, item.source_id)
-            if key in seen:
+            if (item.source_type, item.source_id) in seen:
                 continue
             haystack = f"{item.title}\n{item.content}".lower()
             score = sum(haystack.count(term) for term in query_terms)
@@ -423,23 +411,32 @@ class EvidenceStore:
                 ranked.append((score, item))
         ranked.sort(key=lambda pair: (pair[0], pair[1].created_at), reverse=True)
         for score, item in ranked:
+            if len(results) >= limit:
+                break
             key = (item.source_type, item.source_id)
             if key in seen:
                 continue
             seen.add(key)
-            results.append(
-                {
-                    "title": item.title,
-                    "source_type": item.source_type,
-                    "source_id": item.source_id,
-                    "snippet": extract_relevant_snippet(query, item.content, max_tokens=90),
-                    "score": score,
-                    "metadata": item.meta or {},
-                    "retrieval": {"sources": ["evidence_item_keyword"]},
-                }
-            )
-            if len(results) >= limit:
-                break
+            results.append({
+                "title": item.title,
+                "source_type": item.source_type,
+                "source_id": item.source_id,
+                "snippet": extract_relevant_snippet(query, item.content, max_tokens=90),
+                "score": None,
+                "metadata": item.meta or {},
+                "retrieval": {
+                    "sources": ["conversation_memory_keyword"],
+                    "keyword_matches": score,
+                    "evidence_usage": "historical_context",
+                    "selected_for_context": True,
+                },
+            })
+        self.retrieval_trace.update({
+            "rag_selected_count": rag_count,
+            "memory_selected_count": len(results) - rag_count,
+            "selected_count": len(results),
+            "memory_scope": str(conversation_id) if conversation_id else "project",
+        })
         return results
 
     def _add(self, repo_id: uuid.UUID | None, conversation_id: uuid.UUID | None, source_type: str, source_id: str, title: str, content: str, meta: dict[str, Any]) -> None:
@@ -457,10 +454,12 @@ class AssembledContext:
 
 
 class ContextAssembler:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, retriever: AgentKnowledgeRetriever | None = None, *, retrieval_top_k: int | None = None) -> None:
         self.db = db
+        self.retriever = retriever or AgentKnowledgeRetriever(db)
+        self.retrieval_top_k = retrieval_top_k
 
-    def assemble(self, repo: Repository | None, conversation: Conversation | None, current_message: str, limit: int = 16) -> AssembledContext:
+    async def assemble(self, repo: Repository | None, conversation: Conversation | None, current_message: str, limit: int = 16) -> AssembledContext:
         budget = default_context_budget()
         repo_id = repo.id if repo else None
         conversation_id = conversation.id if conversation else None
@@ -481,7 +480,9 @@ class ContextAssembler:
             .order_by(ChatSession.created_at.desc())
             .first()
         )
-        evidence = EvidenceStore(self.db).search(repo_id, conversation_id, current_message, limit=8)
+        evidence_store = EvidenceStore(self.db, self.retriever)
+        evidence = await evidence_store.search(repo_id, conversation_id, current_message, limit=8, rag_top_k=self.retrieval_top_k)
+        retrieval_trace = evidence_store.retrieval_trace
         history_fetch_limit = max(limit, 30)
         recent = message_store.recent(repo_id, conversation_id, limit=history_fetch_limit)
         raw_history = [
@@ -557,12 +558,15 @@ class ContextAssembler:
             memory_context = clip_to_token_budget("\n\n".join(memory_sections), budget.memory_tokens)
             if memory_context:
                 sections.append(memory_context)
+            if retrieval_trace:
+                sections.append("[Retrieval Status]\n" + dumps_compact({key: retrieval_trace[key] for key in ("policy", "status", "answer_gate", "memory_selected_count") if key in retrieval_trace}) + "\n" + investigation_hint(retrieval_trace) + "\n[/Retrieval Status]")
             if next_evidence:
                 evidence_budget = max(120, budget.evidence_tokens // max(len(next_evidence), 1))
                 lines = ["[Related Evidence]"]
                 for item in next_evidence:
                     snippet = clip_to_token_budget(item["snippet"], evidence_budget)
-                    lines.append(f"- [{item['source_type']}] {item['title']}: {snippet}")
+                    usage = (item.get("retrieval") or {}).get("evidence_usage", "evidence")
+                    lines.append(f"- [{item['source_type']}; {usage}] {item['title']}: {snippet}")
                 lines.append("[/Related Evidence]")
                 sections.append(clip_to_token_budget("\n".join(lines), budget.evidence_tokens))
             return "\n\n".join(sections)
@@ -635,20 +639,22 @@ class ContextAssembler:
                     "reserved_response": budget.reserved_response_tokens,
                 },
                 "evidence_items": len(evidence),
+                "retrieval": retrieval_trace,
                 "mode": "progressive_budgeted_context",
             },
         )
 
 
 class ProgressiveContextManager:
-    def __init__(self, db: Session, llm: LLMClient | None = None) -> None:
+    def __init__(self, db: Session, llm: LLMClient | None = None, retriever: AgentKnowledgeRetriever | None = None) -> None:
         self.db = db
         self.llm = llm or LLMClient()
+        self.retriever = retriever or AgentKnowledgeRetriever(db)
 
     async def ensure_headroom(self, repo: Repository | None, conversation: Conversation | None, current_message: str) -> dict[str, Any]:
         if repo is None or conversation is None:
             return {"attempted": False, "reason": "no_repo_or_conversation"}
-        assembled = ContextAssembler(self.db).assemble(repo, conversation, current_message)
+        assembled = await ContextAssembler(self.db, self.retriever).assemble(repo, conversation, current_message)
         assembled_pressure = assembled.compression_stats.get("pressure") or {}
         micro_stats = assembled.compression_stats.get("microcompact") or {}
         raw_segment_tokens = self._raw_segment_tokens(repo.id, conversation.id) + estimate_tokens(current_message)
@@ -1310,10 +1316,13 @@ class MemoryTools:
 
     async def search_evidence(self, input_data: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         query = str(input_data.get("query") or input_data.get("message") or "")
-        results = EvidenceStore(self.db).search(self.repo_id, self.conversation_id, query, limit=int(input_data.get("limit") or 5))
+        evidence_store = EvidenceStore(self.db)
+        results = await evidence_store.search(self.repo_id, self.conversation_id, query, limit=int(input_data.get("limit") or 5))
+        retrieval_trace = evidence_store.retrieval_trace
         answer = "No evidence matched this query." if not results else "\n".join(
             f"- [{item['source_type']}] {item['title']}: {item['snippet']}" for item in results
         )
+        answer += "\n\n" + investigation_hint(retrieval_trace)
         citations = [{"type": item["source_type"], "id": item["source_id"], "title": item["title"]} for item in results]
         record_recall_event(
             self.db,
@@ -1324,8 +1333,8 @@ class MemoryTools:
             results=results,
             citations=citations,
             scope="conversation" if self.conversation_id else "project",
-            mode="hybrid",
-            metadata={"limit": int(input_data.get("limit") or 5)},
+            mode=retrieval_trace.get("retrieval_method") or "hybrid",
+            metadata={"limit": int(input_data.get("limit") or 5), "retrieval": retrieval_trace},
         )
         return {
             "route": "memory_search",
@@ -1333,6 +1342,9 @@ class MemoryTools:
             "answer": answer,
             "citations": citations,
             "results": results,
+            "retrieval_results": results,
+            "retrieval_trace": retrieval_trace,
+            "answer_gate": retrieval_trace.get("answer_gate") or {},
         }
 
     async def get_thread_context(self, input_data: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:

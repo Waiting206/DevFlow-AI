@@ -194,7 +194,8 @@ def test_pr_analysis_context_prefers_snapshot_docs_and_graph(tmp_path, monkeypat
     assert context["code_graph_impact"]["symbols"][0]["name"] == "handler"
 
 
-def test_pr_analysis_keeps_patch_out_of_semantic_queries(monkeypatch) -> None:
+@pytest.mark.asyncio
+async def test_pr_analysis_keeps_patch_out_of_semantic_queries(monkeypatch) -> None:
     monkeypatch.setattr(settings, "milvus_enabled", False)
     reset_milvus_store_cache()
     db = _db_session()
@@ -243,7 +244,7 @@ def test_pr_analysis_keeps_patch_out_of_semantic_queries(monkeypatch) -> None:
     monkeypatch.setattr("app.api.routes.pull_requests.search_similar_documents", fake_search)
     monkeypatch.setattr("app.api.routes.pull_requests.search_repository_code", fake_code_search)
 
-    code_query, _context, _counts = _build_pr_analysis_context(db, pr)
+    code_query, _context, _counts = await _build_pr_analysis_context(db, pr)
 
     assert "SENSITIVE_PATCH_ONLY_FOR_CODE_LOOKUP" in code_query
     assert any("SENSITIVE_PATCH_ONLY_FOR_CODE_LOOKUP" in query for query in code_calls)
@@ -278,7 +279,8 @@ def test_ci_context_uses_related_pr_snapshot_docs_and_graph(tmp_path, monkeypatc
     assert context["code_graph_impact"]["symbols"][0]["name"] == "test_target"
 
 
-def test_ci_analysis_redacts_semantic_queries_but_keeps_local_code_context(monkeypatch) -> None:
+@pytest.mark.asyncio
+async def test_ci_analysis_redacts_semantic_queries_but_keeps_local_code_context(monkeypatch) -> None:
     monkeypatch.setattr(settings, "milvus_enabled", False)
     reset_milvus_store_cache()
     db = _db_session()
@@ -308,7 +310,7 @@ def test_ci_analysis_redacts_semantic_queries_but_keeps_local_code_context(monke
     monkeypatch.setattr("app.api.routes.ci.search_similar_documents", fake_search)
     monkeypatch.setattr("app.api.routes.ci.search_repository_code", fake_code_search)
 
-    code_query, _context, _counts = _build_ci_analysis_context(db, run)
+    code_query, _context, _counts = await _build_ci_analysis_context(db, run)
 
     assert secret in code_query
     assert code_calls and secret in code_calls[0]

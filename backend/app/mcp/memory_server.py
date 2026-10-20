@@ -149,7 +149,7 @@ async def _call_memory_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
                 raise McpError(-32602, "query 为必填项")
             result = await tools.search_evidence({"query": query, "limit": int(args.get("limit") or 5)}, {})
             db.commit()
-            return _content(f"仓库：{_repo_label(repo)}\n会话：{conversation.title if conversation else '全局'}\n\n{result.get('answer') or ''}")
+            return {**_content(f"仓库：{_repo_label(repo)}\n会话：{conversation.title if conversation else '全局'}\n\n{result.get('answer') or ''}"), "structuredContent": {key: result[key] for key in ("retrieval_results", "retrieval_trace", "answer_gate", "citations")}}
 
         if name == "devflow_get_thread_context":
             result = await tools.get_thread_context(

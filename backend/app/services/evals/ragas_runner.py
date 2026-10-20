@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.db.models import Conversation, Document, Issue, PullRequest, Repository, WorkflowRun
 from app.services.agents.chat_agent import ChatAgent
 from app.services.chat_memory import ContextAssembler, EvidenceStore
+from app.services.rag.agent_retrieval import AgentKnowledgeRetriever
 from app.services.rag.embeddings import embed_text
 from app.services.rag.source_policy import RAG_SOURCE_TYPES
 
@@ -642,7 +643,8 @@ async def _run_chatagent_case(
         db.add(conversation)
         db.flush()
         EvidenceStore(db).rebuild_repo(repo, conversation)
-        assembled = ContextAssembler(db).assemble(repo, conversation, case.question)
+        retriever = AgentKnowledgeRetriever(db)
+        assembled = await ContextAssembler(db, retriever, retrieval_top_k=limit).assemble(repo, conversation, case.question)
         from app.api.routes.chat import _build_conversation_tools, _skill_runtime_context
 
         context: dict[str, Any] = {
@@ -658,7 +660,7 @@ async def _run_chatagent_case(
             "limit": limit,
             "evaluation_mode": True,
         }
-        context["tools"] = _build_conversation_tools(repo, conversation, db)
+        context["tools"] = _build_conversation_tools(repo, conversation, db, retriever)
         return await agent_factory().run({"message": case.question}, context)
     finally:
         if savepoint.is_active:

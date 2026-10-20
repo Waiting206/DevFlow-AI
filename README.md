@@ -80,6 +80,8 @@ npm run dev
 
 对话链路采用混合 RAG：`ContextAssembler` 会在调用 ChatAgent 前按原始问题检索并注入证据；进入推理循环后，模型仍可把 `rag.search_similar_documents` 当作工具，改写查询、连续补查不同资料，并根据多次工具结果交叉验证答案。
 
+聊天预检索、Agent 主动检索和 MCP 记忆搜索现已共用知识问答的完整检索核心，实际读取仓库配置并记录重排、阈值过滤与降级轨迹。正式问答保持严格的证据检查；Agent 可以在证据不足时继续读代码或查询其他工具。实现与验证见 [统一检索整改说明](docs/architecture/unified-agent-retrieval.md)。
+
 项目不会把所有私域数据都向量化。只有需要跨来源语义召回、会反复使用的非结构化知识进入 RAG；源码与配置以当前 checkout 为准，优先通过 `workspace.search_code` 和 `workspace.read_file` 检索；Issue、PR、CI 的状态字段、团队成员和周报等结构化或派生数据直接查数据库/API。RAG 返回的是候选证据，涉及实时状态和当前代码时仍要回到权威数据源核验。
 
 从旧版本升级后，请对每个知识库调用一次 `POST /api/rag/{repo_id}/reindex`。重建会按新边界清理历史向量和旧会话 Document；只部署代码不会主动删除已有索引。

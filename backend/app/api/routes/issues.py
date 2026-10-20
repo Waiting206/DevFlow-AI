@@ -74,14 +74,14 @@ def _fallback_project_documents(db: Session, repo_id: UUID) -> list[dict]:
     ]
 
 
-def _conversation_evidence(db: Session, issue: Issue, conversation_id: UUID | None, query: str) -> list[dict]:
+async def _conversation_evidence(db: Session, issue: Issue, conversation_id: UUID | None, query: str) -> list[dict]:
     if not conversation_id:
         return []
     conversation = db.get(Conversation, conversation_id)
     if conversation is None or conversation.repo_id != issue.repo_id:
         return []
     repo = db.get(Repository, issue.repo_id)
-    assembled = ContextAssembler(db).assemble(repo, conversation, query, limit=8)
+    assembled = await ContextAssembler(db).assemble(repo, conversation, query, limit=8)
     evidence = _document_evidence(assembled.evidence, "conversation")
     if assembled.system_context.strip():
         evidence.append(
@@ -109,7 +109,7 @@ def _issue_payload(issue: Issue) -> dict:
     }
 
 
-def _build_issue_analysis_context(db: Session, issue: Issue, conversation_id: UUID | None = None) -> tuple[str, dict, dict]:
+async def _build_issue_analysis_context(db: Session, issue: Issue, conversation_id: UUID | None = None) -> tuple[str, dict, dict]:
     query = f"{issue.title}\n{issue.body or ''}"
     repo = db.get(Repository, issue.repo_id)
     similar_docs = search_similar_documents(db, str(issue.repo_id), query, "issue", 4)
@@ -138,7 +138,7 @@ def _build_issue_analysis_context(db: Session, issue: Issue, conversation_id: UU
     )
     if not project_docs:
         project_docs = _fallback_project_documents(db, issue.repo_id)
-    chat_evidence = _conversation_evidence(db, issue, conversation_id, query)
+    chat_evidence = await _conversation_evidence(db, issue, conversation_id, query)
     team_members = [
         {
             "name": (doc.meta or {}).get("name") or doc.title.replace("团队成员：", "").replace("Team member: ", ""),
@@ -250,7 +250,7 @@ async def _issue_analysis_sse(issue_id: UUID, conversation_id: UUID | None, db: 
     payload = _issue_payload(issue)
     try:
         yield _encode_sse("trace", _trace_item("step", "读取 Issue", f"读取 Issue #{issue.number} 的标题、正文、标签、状态和已分配人员。", "running"))
-        query, context, counts = _build_issue_analysis_context(db, issue, conversation_id)
+        query, context, counts = await _build_issue_analysis_context(db, issue, conversation_id)
         yield _encode_sse("trace", _trace_item("tool", "检索相似历史", f"找到 {counts['duplicates']} 个相似 Issue 候选。"))
         yield _encode_sse("trace", _trace_item("tool", "检索代码与文档", f"找到 {counts['code']} 条代码线索、{counts['documents']} 条项目文档/记忆线索。"))
         yield _encode_sse("trace", _trace_item("tool", "读取团队画像", f"读取 {counts['team_members']} 位团队成员，用于建议负责人。"))
@@ -291,7 +291,7 @@ async def analyze_issue(
     if issue is None:
         raise HTTPException(status_code=404, detail="未找到 Issue")
     agent = IssueAgent()
-    _query, context, counts = _build_issue_analysis_context(db, issue, conversation_id)
+    _query, context, counts = await _build_issue_analysis_context(db, issue, conversation_id)
     result = await agent.run(_issue_payload(issue), context)
     analysis = _persist_issue_analysis(db, issue, result, agent.llm.model, conversation_id, counts)
     return IssueAnalysisResponse(analysis_id=analysis.id, result=result)

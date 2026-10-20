@@ -657,12 +657,13 @@ def test_evidence_store_redacts_failed_ci_logs_before_chat_context() -> None:
     assert evidence.meta["secrets_redacted"] is True
 
 
-def test_context_assembler_prefetches_rag_evidence_before_chat_agent(monkeypatch) -> None:
+@pytest.mark.asyncio
+async def test_context_assembler_prefetches_rag_evidence_before_chat_agent(monkeypatch) -> None:
     db = _db_session()
     repo = _repo(db)
     queries: list[str] = []
 
-    def fake_search(self, repo_id, conversation_id, query, limit=5):
+    async def fake_search(self, repo_id, conversation_id, query, limit=5, **kwargs):
         queries.append(query)
         return [
             {
@@ -677,7 +678,7 @@ def test_context_assembler_prefetches_rag_evidence_before_chat_agent(monkeypatch
         ]
 
     monkeypatch.setattr(EvidenceStore, "search", fake_search)
-    assembled = ContextAssembler(db).assemble(
+    assembled = await ContextAssembler(db).assemble(
         repo,
         None,
         "How should refresh retries work?",
@@ -689,7 +690,8 @@ def test_context_assembler_prefetches_rag_evidence_before_chat_agent(monkeypatch
     assert "Refresh retries must use an idempotency key." in assembled.system_context
 
 
-def test_context_assembler_reports_exact_recent_history_coverage() -> None:
+@pytest.mark.asyncio
+async def test_context_assembler_reports_exact_recent_history_coverage() -> None:
     db = _db_session()
     repo = _repo(db)
     conversation = Conversation(repo_id=repo.id, title="Recall recent messages")
@@ -714,7 +716,7 @@ def test_context_assembler_reports_exact_recent_history_coverage() -> None:
     )
     db.flush()
 
-    assembled = ContextAssembler(db).assemble(repo, conversation, "我刚刚说了什么？")
+    assembled = await ContextAssembler(db).assemble(repo, conversation, "我刚刚说了什么？")
     coverage = assembled.compression_stats["history_coverage"]
 
     assert coverage["complete_and_exact"] is True

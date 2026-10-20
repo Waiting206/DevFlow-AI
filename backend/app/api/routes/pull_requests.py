@@ -94,14 +94,14 @@ def _fallback_project_documents(db: Session, repo_id: UUID) -> list[dict]:
     ]
 
 
-def _conversation_evidence(db: Session, pr: PullRequest, conversation_id: UUID | None, query: str) -> list[dict]:
+async def _conversation_evidence(db: Session, pr: PullRequest, conversation_id: UUID | None, query: str) -> list[dict]:
     if not conversation_id:
         return []
     conversation = db.get(Conversation, conversation_id)
     if conversation is None or conversation.repo_id != pr.repo_id:
         return []
     repo = db.get(Repository, pr.repo_id)
-    assembled = ContextAssembler(db).assemble(repo, conversation, query, limit=8)
+    assembled = await ContextAssembler(db).assemble(repo, conversation, query, limit=8)
     evidence = _document_evidence(assembled.evidence, "conversation")
     if assembled.system_context.strip():
         evidence.append(
@@ -155,7 +155,7 @@ def _pr_review_plan() -> list[str]:
     ]
 
 
-def _build_pr_analysis_context(db: Session, pr: PullRequest, conversation_id: UUID | None = None) -> tuple[str, dict, dict]:
+async def _build_pr_analysis_context(db: Session, pr: PullRequest, conversation_id: UUID | None = None) -> tuple[str, dict, dict]:
     repo = db.get(Repository, pr.repo_id)
     file_names = [file.filename for file in pr.files]
     diff_text = "\n".join(f"{file.filename}\n{file.patch or ''}" for file in pr.files[:12])
@@ -182,7 +182,7 @@ def _build_pr_analysis_context(db: Session, pr: PullRequest, conversation_id: UU
         search_similar_documents(db, str(pr.repo_id), semantic_query, "issue", 4),
         "issue",
     )
-    chat_evidence = _conversation_evidence(db, pr, conversation_id, semantic_query)
+    chat_evidence = await _conversation_evidence(db, pr, conversation_id, semantic_query)
     recent_runs = (
         db.query(WorkflowRun)
         .filter(WorkflowRun.repo_id == pr.repo_id)
@@ -431,7 +431,7 @@ async def _pr_analysis_sse(pr_id: UUID, conversation_id: UUID | None, db: Sessio
                 str(snapshot.get("message") or f"状态：{snapshot.get('status')}；代码图符号：{snapshot.get('indexed_symbols') or 0}。"),
             ),
         )
-        _query, context, counts = _build_pr_analysis_context(db, pr, conversation_id)
+        _query, context, counts = await _build_pr_analysis_context(db, pr, conversation_id)
         _augment_pr_context_with_snapshot(db, pr, _query, context, counts, snapshot)
         context["plan"] = plan
         yield _encode_sse("trace", _trace_item("tool", "执行 2/6：拆分 diff 风险", f"扫描 {counts['files']} 个文件，识别敏感文件 {len((context.get('diff_stats') or {}).get('sensitive_files') or [])} 个。"))
@@ -483,7 +483,7 @@ async def analyze_pull_request(
     agent = PRReviewAgent()
     snapshot_enabled = use_pr_snapshot if use_worktree is None else use_worktree
     snapshot = _prepare_pr_snapshot_context(db, pr, snapshot_enabled)
-    _query, context, counts = _build_pr_analysis_context(db, pr, conversation_id)
+    _query, context, counts = await _build_pr_analysis_context(db, pr, conversation_id)
     _augment_pr_context_with_snapshot(db, pr, _query, context, counts, snapshot)
     result = await agent.run(_pr_payload(pr), context)
     analysis = _persist_pr_analysis(db, pr, result, agent.llm.model, conversation_id, counts)

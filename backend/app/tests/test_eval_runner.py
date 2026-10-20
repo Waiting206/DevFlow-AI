@@ -393,6 +393,11 @@ async def test_rag_quality_eval_runs_real_chatagent_and_rolls_back_eval_conversa
         meta={},
     )
     db.add(document)
+    from app.services.rag.knowledge_base import get_or_create_config
+    config = get_or_create_config(db, repo.id, commit=False)
+    config.retrieval_method = "fulltext"
+    config.rerank_enabled = False
+    config.score_threshold_enabled = False
     db.commit()
     scorer = RecordingScorer()
     progress_events = []
@@ -417,6 +422,7 @@ async def test_rag_quality_eval_runs_real_chatagent_and_rolls_back_eval_conversa
     assert result["kind"] == "chatagent_ragas"
     assert result["target"]["name"] == "ChatAgent"
     assert result["status"] == "passed"
+    assert result["cases"][0]["retrieval_trace"][0]["retrieval_trace"]["top_k"] == 5
     assert result["hard_gate"]["passed"] is True
     assert result["retrieval"]["recall_at_k"] == 1.0
     assert result["ragas"]["version"] == "test-ragas-0.4"

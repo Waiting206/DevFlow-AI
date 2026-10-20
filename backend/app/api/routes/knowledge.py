@@ -162,7 +162,8 @@ async def search_memory(
 ) -> MemorySearchResponse:
     repo = _repo_or_404(db, repo_id)
     query = q.strip()
-    results = EvidenceStore(db).search(repo.id, None, query, limit=limit) if query else []
+    evidence_store = EvidenceStore(db)
+    results = await evidence_store.search(repo.id, None, query, limit=limit) if query else []
     record_recall_event(
         db,
         repo_id=repo.id,
@@ -173,7 +174,7 @@ async def search_memory(
         citations=[{"type": item["source_type"], "id": item["source_id"], "title": item["title"]} for item in results],
         scope="project",
         mode="hybrid",
-        metadata={"limit": limit, "surface": "workspace_memory"},
+        metadata={"limit": limit, "surface": "workspace_memory", "retrieval": evidence_store.retrieval_trace},
     )
     db.commit()
     return MemorySearchResponse(query=query, results=results, result_count=len(results))

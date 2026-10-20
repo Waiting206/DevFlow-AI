@@ -268,13 +268,14 @@ async def test_session_sealer_keeps_raw_transcript_when_extraction_fails() -> No
     assert "memory_extraction_failed" in sealed.transcript_json["sealing"]["errors"][0]
 
 
-def test_context_assembler_keeps_recent_history_out_of_system_context() -> None:
+@pytest.mark.asyncio
+async def test_context_assembler_keeps_recent_history_out_of_system_context() -> None:
     db = _db()
     repo, conversation = _scope(db)
     now = datetime.now(timezone.utc)
     _message(db, repo, conversation, role="user", content="UNIQUE-RECENT-MESSAGE", at=now)
 
-    assembled = ContextAssembler(db).assemble(repo, conversation, "UNIQUE-RECENT-MESSAGE")
+    assembled = await ContextAssembler(db).assemble(repo, conversation, "UNIQUE-RECENT-MESSAGE")
 
     assert "UNIQUE-RECENT-MESSAGE" not in assembled.system_context
     assert assembled.history_messages[-1]["content"] == "UNIQUE-RECENT-MESSAGE"

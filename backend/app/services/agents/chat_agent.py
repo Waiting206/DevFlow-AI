@@ -243,6 +243,7 @@ class ChatAgent(BaseAgent):
                     "evidence_count": len(prefetched_evidence),
                     "query": message,
                     "sources": pre_retrieval_sources,
+                    "retrieval_trace": (context.get("compression_stats") or {}).get("retrieval") or {},
                 },
                 "reasoning_retrieval": {
                     "enabled": reasoning_retrieval_enabled,
@@ -830,6 +831,7 @@ class ChatAgent(BaseAgent):
                 "error_kind": observation.get("error_kind"),
                 "retryable": observation.get("retryable"),
                 "content": summary,
+                **({"retrieval_trace": observation["retrieval_trace"]} if observation.get("retrieval_trace") else {}),
                 **self._skill_event_metadata(public_action, state),
             },
         )
@@ -997,7 +999,11 @@ class ChatAgent(BaseAgent):
             "涉及已索引的仓库历史和上传知识，使用 rag.search_similar_documents 或 devflow_search_evidence。\n\n"
             "混合 RAG 约定：服务端上下文中的 [Related Evidence] 是根据原始问题完成的调用前检索。"
             "如果这些证据不足、互相冲突，或问题包含多个子问题，请改写为更具体的 query 调用 "
-            "rag.search_similar_documents；可以用不同 query 连续补查，并在最终回答前比较多次 tool_result。\n\n"
+            "rag.search_similar_documents；可以用不同 query 连续补查，并在最终回答前比较多次 tool_result。\n"
+            "检索结果中的 answer_gate 只评价本次知识检索，不代表整个任务必须停止。insufficient_evidence 时补查其他来源；"
+            "conflict 时核对版本和原始来源；ask_clarification 时先结合对话定位对象，仍不明确才询问用户。"
+            "investigation_lead 只能作为待核实线索，historical_context 是可能过期的历史记录，均不能直接当作当前事实。"
+            "最终回答前综合检索、源码和结构化工具结果，区分已验证结论、推断与无法确认的内容，提供对应引用。\n\n"
             "工作流硬性规则：如果用户请求多 Agent 审查、合并就绪度、当前阻塞、工程状态、跨 Agent 综合，"
             "或依赖 Issue、PR、CI 与仓库证据共同判断的决策，必须先调用 workflow.run_engineering_review，"
             "再给出最终建议。\n\n"
@@ -1437,7 +1443,9 @@ class ChatAgent(BaseAgent):
         rendered = [item for item in rendered if item]
         if not rendered:
             return ""
-        return "根据当前仓库已同步的证据：\n\n" + "\n\n".join(
+        gate = ((context.get("compression_stats") or {}).get("retrieval") or {}).get("answer_gate") or {}
+        prefix = "以下仅为待核实线索，当前证据不足以形成确定结论：" if gate.get("decision", "answer") != "answer" else "根据当前仓库已同步的证据："
+        return prefix + "\n\n" + "\n\n".join(
             f"{index + 1}. {item}" for index, item in enumerate(rendered)
         )
 
@@ -1683,6 +1691,7 @@ class ChatAgent(BaseAgent):
             "context_diagnostics": {
                 "prompt_calls": state.get("prompt_diagnostics") or [],
                 "runtime_tool_context": state.get("runtime_context_stats") or {},
+                "pre_retrieval": ((state.get("context") or {}).get("compression_stats") or {}).get("retrieval") or {},
                 "reactive_overflow_retry": bool(state.get("context_overflow_recovery_attempted")),
             },
         }
@@ -1918,6 +1927,7 @@ class ChatAgent(BaseAgent):
                 "budget_tokens": limit,
             },
             "citations_count": len(observation.get("citations", [])),
+            **({"retrieval_status": {key: observation["retrieval_trace"][key] for key in ("policy", "status", "top_k", "cache_hit", "answer_gate") if key in observation["retrieval_trace"]}, "answer_gate": observation.get("answer_gate") or {}} if observation.get("retrieval_trace") else {}),
         }
 
     def _initial_evaluation_trace(self, message: str, context: dict[str, Any]) -> dict[str, Any]:
@@ -1940,10 +1950,11 @@ class ChatAgent(BaseAgent):
                 }
             )
         retrievals = []
-        if contexts or sources:
+        if contexts or sources or (context.get("compression_stats") or {}).get("retrieval"):
             retrievals.append(
                 {
                     "stage": "prefetch",
+                    "retrieval_trace": (context.get("compression_stats") or {}).get("retrieval") or {},
                     "query": message,
                     "contexts": contexts,
                     "sources": sources,
@@ -1993,11 +2004,12 @@ class ChatAgent(BaseAgent):
                 for item in observation.get("retrieved_contexts", [])
                 if str(item).strip()
             ]
-        if tool_name == "rag.search_similar_documents" or contexts or sources:
+        if tool_name == "rag.search_similar_documents" or contexts or sources or observation.get("retrieval_trace"):
             retrievals = list(trace.get("retrievals") or [])
             retrievals.append(
                 {
                     "stage": "agent_tool",
+                    "retrieval_trace": observation.get("retrieval_trace") or {},
                     "query": str(arguments.get("query") or arguments.get("message") or ""),
                     "contexts": contexts,
                     "sources": sources,
