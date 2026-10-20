@@ -53,8 +53,8 @@ def ensure_conversation(db: Session, repo_id: uuid.UUID, conversation_id: uuid.U
 
 def list_conversations(db: Session, repo_id: uuid.UUID) -> list[Conversation]:
     ensure_default_conversation(db, repo_id)
-    _backfill_repo_conversation(db, repo_id)
-    db.flush()
+    # Legacy backfill runs at startup. Repeating it on reads can wait on a
+    # streaming reply's conversation lock and block the async server loop.
     return (
         db.query(Conversation)
         .filter(Conversation.repo_id == repo_id, Conversation.status == "active")

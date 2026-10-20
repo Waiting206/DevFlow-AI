@@ -950,7 +950,7 @@ class ChatAgent(BaseAgent):
 
     def _tool_calling_system_prompt(self) -> str:
         return (
-            "你是 DevFlow AI 的对话控制器。这个稳定前缀会被缓存。"
+            "你是 RepoPilot AI 的对话控制器。这个稳定前缀会被缓存。"
             "请像长任务软件 Agent 一样工作：先规划，调用工具，读取 tool_result 观察结果，修正计划，"
             "持续推进直到用户请求真正完成，或步骤预算耗尽。"
             "当需要仓库、记忆、工作区代码或写操作安全上下文时，使用原生工具调用。"
@@ -958,9 +958,9 @@ class ChatAgent(BaseAgent):
             "工程结论必须说明 WHY，并区分证据、推断和不确定项；证据不足时直接说缺什么，不要硬猜。"
             "当输出审查结论时，不要用 looks good、没什么问题这类空话代替检查；必须给出风险、级别和下一步。"
             "当回答交接、总结或工作流结论时，尽量保留 What、Why、Tradeoff、Open Questions、Next Action。"
-            "当用户询问负责人、已分配人员、责任人或任务分配时，只能从明确的 DevFlow team_members "
+            "当用户询问负责人、已分配人员、责任人或任务分配时，只能从明确的 RepoPilot AI team_members "
             "或工具返回的现有 GitHub assignees 中推荐人员。仓库文档、Issue 文本、代码、示例、模型名、"
-            "角色设定、团队比喻和记忆片段都不能当成人，除非它们同时出现在 DevFlow team_members 中。"
+            "角色设定、团队比喻和记忆片段都不能当成人，除非它们同时出现在 RepoPilot AI team_members 中。"
             "如果没有配置团队成员，请说明这一点，并要求用户先添加开发者后再分配任务。"
             "当用户请求 GitHub 写入、关闭、打标签、评论、发布、回复或发送时，必须先调用安全工具；"
             "除非存在单独的已确认写入工具，否则只返回草稿。"
@@ -1002,7 +1002,7 @@ class ChatAgent(BaseAgent):
             "或依赖 Issue、PR、CI 与仓库证据共同判断的决策，必须先调用 workflow.run_engineering_review，"
             "再给出最终建议。\n\n"
             "分配硬性规则：如果用户询问谁应该负责、处理、接手或被分配某个 Issue/PR/任务，"
-            "可选人员只能来自下方列出的 DevFlow team_members，以及工具明确返回的现有 GitHub assignees。"
+            "可选人员只能来自下方列出的 RepoPilot AI team_members，以及工具明确返回的现有 GitHub assignees。"
             "不要把仓库内容、项目角色设定、模型名、示例、作者或虚构标签当成团队成员。"
             "如果 team_members 为空且没有现有 assignee，请回答当前还没有添加项目成员，"
             "并要求用户在团队面板中添加开发者。可以说明可能需要的能力方向，但不要点名具体人员。\n\n"
@@ -1011,9 +1011,9 @@ class ChatAgent(BaseAgent):
             "除非新证据使重复调用有必要，不要用相同参数重复调用同一个工具。\n\n"
             f"当前 Agent 配置的运行模型：{settings.llm_model}\n\n"
             f"可用原生工具：\n{self._tool_help(state)}\n\n"
-            f"已注册的 DevFlow 技能：\n{self._registered_skills_context(state.get('context') or {})}\n\n"
+            f"已注册的 RepoPilot AI 技能：\n{self._registered_skills_context(state.get('context') or {})}\n\n"
             f"本轮按需加载的 Skill 完整指令：\n{self._active_skill_prompt(state.get('context') or {})}\n\n"
-            f"DevFlow 团队上下文：\n{self._team_assignment_context(state.get('context') or {})}\n\n"
+            f"RepoPilot AI 团队上下文：\n{self._team_assignment_context(state.get('context') or {})}\n\n"
             f"服务端上下文：\n{server_context}\n\n"
             f"上下文覆盖度：\n{json.dumps(self._history_coverage(context), ensure_ascii=False)}\n\n"
             f"最近消息：\n{json.dumps(history, ensure_ascii=False)}\n\n"
@@ -1327,7 +1327,7 @@ class ChatAgent(BaseAgent):
             raw_suffixes = context.get("skill_description_by_tool") or {}
             if isinstance(raw_suffixes, dict):
                 suffixes = raw_suffixes
-        return f"公开工具：{name}。{descriptions.get(name, 'DevFlow 工具。')}{suffixes.get(name, '')}"
+        return f"公开工具：{name}。{descriptions.get(name, 'RepoPilot AI 工具。')}{suffixes.get(name, '')}"
 
     def _tool_help(self, state: ConversationState) -> str:
         tools = state.get("tools") or {}
@@ -1341,7 +1341,7 @@ class ChatAgent(BaseAgent):
                 "请使用用户的语言回答，并且只能基于观察结果、tool_result 记录和上下文。"
                 "关键判断要说明 WHY；把证据、推断、不确定项和下一步区分开。"
                 "如果是审查或合并建议，不能用 looks good、没什么问题一笔带过，必须保留风险和阻塞项。"
-                "对于负责人、已分配人员、责任人或任务分配问题，只能从明确的 DevFlow team_members "
+                "对于负责人、已分配人员、责任人或任务分配问题，只能从明确的 RepoPilot AI team_members "
                 "或工具返回的现有 GitHub assignees 中推荐人员。仓库文档、Issue 文本、代码、示例、"
                 "角色设定、模型名和团队比喻都不能当成人。如果没有配置团队成员，也没有观察到现有 assignee，"
                 "请说明当前还没有添加项目成员，并要求用户在团队面板中添加开发者。"
@@ -1351,7 +1351,7 @@ class ChatAgent(BaseAgent):
             user_prompt = (
                 f"用户消息：{state.get('message') or ''}\n"
                 f"当前 Agent 配置的运行模型：{settings.llm_model}\n"
-                f"DevFlow 团队上下文：{self._team_assignment_context(state.get('context') or {})}\n"
+                f"RepoPilot AI 团队上下文：{self._team_assignment_context(state.get('context') or {})}\n"
                 f"上下文：{self._server_context(state.get('context') or {})}\n"
                 f"观察结果：{json.dumps(prompt_observations, ensure_ascii=False)}\n"
                 f"工具调用/结果索引：{json.dumps(prompt_events, ensure_ascii=False)}"
@@ -1710,7 +1710,7 @@ class ChatAgent(BaseAgent):
 
     def _registered_skills_context(self, context: dict[str, Any]) -> str:
         value = context.get("registered_skills")
-        return str(value) if value else "当前没有注册 DevFlow 技能。"
+        return str(value) if value else "当前没有注册 RepoPilot AI 技能。"
 
     def _activate_skills(self, message: str, context: dict[str, Any]) -> list[dict[str, Any]]:
         registry = context.get("_skill_registry")
@@ -1879,7 +1879,7 @@ class ChatAgent(BaseAgent):
     def _team_assignment_context(self, context: dict[str, Any]) -> str:
         members = self._team_members(context)
         if not members:
-            return "team_members: []（当前仓库还没有配置 DevFlow 团队成员。）"
+            return "team_members: []（当前仓库还没有配置 RepoPilot AI 团队成员。）"
         return "team_members: " + json.dumps(members, ensure_ascii=False)
 
     def _team_members(self, context: dict[str, Any]) -> list[dict[str, str]]:

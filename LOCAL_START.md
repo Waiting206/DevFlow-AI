@@ -13,9 +13,9 @@
 
 1. 打开项目根目录。
 2. Python 解释器选择 `backend/.venv/bin/python`。
-3. 运行配置选择 **DevFlow AI - Full Stack** 并点击运行。
+3. 运行配置选择 **RepoPilot AI - Full Stack** 并点击运行。
 
-该运行配置会启动 Docker 数据库、Milvus、FastAPI 和 Next.js，检查它们的就绪状态。停止运行会关闭前后端，数据库容器保留，数据不会丢失。已有其他实例时请先停止原来的 DevFlow 运行，避免端口冲突。
+该运行配置会启动 Docker 数据库、Milvus、FastAPI 和 Next.js，检查它们的就绪状态。停止运行会关闭前后端，数据库容器保留，数据不会丢失。已有其他实例时请先停止原来的 RepoPilot AI 运行，避免端口冲突。
 
 也可以在项目根目录运行：
 

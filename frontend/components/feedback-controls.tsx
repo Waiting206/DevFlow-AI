@@ -97,7 +97,7 @@ export function FeedbackControls({
           disabled={pending}
           onClick={() => void submit("helpful")}
           className={`flex h-8 w-8 items-center justify-center rounded-md transition disabled:cursor-not-allowed disabled:opacity-50 ${
-            feedback?.rating === "helpful" ? "bg-emerald-50 text-emerald-700" : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            feedback?.rating === "helpful" ? "bg-success-soft text-success" : "text-subtle hover:bg-elevated hover:text-content"
           }`}
         >
           {pending && !panelOpen ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ThumbsUp className="h-4 w-4" />}
@@ -113,14 +113,14 @@ export function FeedbackControls({
             setError("");
           }}
           className={`flex h-8 w-8 items-center justify-center rounded-md transition disabled:cursor-not-allowed disabled:opacity-50 ${
-            feedback?.rating === "unhelpful" ? "bg-rose-50 text-rose-700" : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            feedback?.rating === "unhelpful" ? "bg-danger-soft text-danger" : "text-subtle hover:bg-elevated hover:text-content"
           }`}
         >
           <ThumbsDown className="h-4 w-4" />
         </button>
         {feedback && !panelOpen && (
-          <span className="ml-1 flex min-w-0 items-center gap-1 text-xs text-slate-500">
-            <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+          <span className="ml-1 flex min-w-0 items-center gap-1 text-xs text-muted">
+            <Check className="h-3.5 w-3.5 shrink-0 text-success" />
             已记录
             {feedback.run_id && <span className="truncate font-mono text-[11px]">trace {feedback.run_id.slice(0, 8)}</span>}
           </span>
@@ -128,15 +128,15 @@ export function FeedbackControls({
       </div>
 
       {panelOpen && (
-        <div className="mt-2 max-w-xl rounded-md border border-rose-100 bg-rose-50/60 p-3">
+        <div className="mt-2 max-w-xl rounded-md border border-danger-line bg-danger-soft/60 p-3">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-xs font-medium text-slate-700">这条回答哪里需要改进？</span>
+            <span className="text-xs font-medium text-content">这条回答哪里需要改进？</span>
             <button
               type="button"
               title="关闭"
               aria-label="关闭反馈"
               onClick={() => setPanelOpen(false)}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-slate-700"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-subtle hover:bg-surface hover:text-content"
             >
               <X className="h-4 w-4" />
             </button>
@@ -150,8 +150,8 @@ export function FeedbackControls({
                 onClick={() => setReason(item.value)}
                 className={`rounded-md border px-2.5 py-1 text-xs transition ${
                   reason === item.value
-                    ? "border-rose-300 bg-white text-rose-700"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                    ? "border-danger-line bg-surface text-danger"
+                    : "border-line bg-surface text-muted hover:border-line"
                 }`}
               >
                 {item.label}
@@ -164,15 +164,15 @@ export function FeedbackControls({
             rows={2}
             onChange={(event) => setComment(event.target.value)}
             placeholder="补充说明（可选）"
-            className="mt-2 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-700 outline-none focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
+            className="mt-2 w-full resize-y rounded-md border border-line bg-surface px-3 py-2 text-xs leading-5 text-content outline-none focus:border-danger-line focus:ring-2 focus:ring-danger-line"
           />
           <div className="mt-2 flex items-center justify-between gap-3">
-            <span className="text-xs text-rose-600">{error}</span>
+            <span className="text-xs text-danger">{error}</span>
             <button
               type="button"
               disabled={pending}
               onClick={() => void submit("unhelpful")}
-              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-slate-800 px-3 text-xs font-medium text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-elevated px-3 text-xs font-medium text-ink hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
             >
               {pending && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
               提交反馈

@@ -174,7 +174,7 @@ def test_skill_registry_annotates_entrypoint_tool_calls() -> None:
 async def test_stdio_mcp_client_inspects_real_server_and_tools() -> None:
     inspection = await StdioMcpClient().inspect_server()
 
-    assert inspection["initialize"]["serverInfo"] == {"name": "devflow-memory-mcp", "version": "0.1.0"}
+    assert inspection["initialize"]["serverInfo"] == {"name": "repopilot-ai-memory-mcp", "version": "0.1.0"}
     assert inspection["initialize"]["protocolVersion"] == "2024-11-05"
     assert {tool["name"] for tool in inspection["tools"]} == {
         "devflow_search_evidence",

@@ -44,14 +44,14 @@ export default function CIPage() {
         <Card>
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-ink">Workflow Runs</h2>
-            <span className="rounded-full bg-panel px-2.5 py-1 text-xs text-slate-500">{runs.length} 次</span>
+            <span className="rounded-full bg-panel px-2.5 py-1 text-xs text-muted">{runs.length} 次</span>
           </div>
           <div className="mt-4 space-y-2">
             {runs.map((run) => (
-              <GhostButton key={run.id} onClick={() => setSelected(run)} className={selected?.id === run.id ? "border-teal-300 bg-teal-50 text-teal-900" : ""}>
+              <GhostButton key={run.id} onClick={() => setSelected(run)} className={selected?.id === run.id ? "border-accent-line bg-accent-soft text-accent-text" : ""}>
                 <div className="flex items-center justify-between gap-3">
                   <span>{run.name}</span>
-                  <span className={run.conclusion === "failure" ? "text-amber-700" : "text-emerald-700"}>{run.conclusion ?? run.status}</span>
+                  <span className={run.conclusion === "failure" ? "text-warning" : "text-success"}>{run.conclusion ?? run.status}</span>
                 </div>
               </GhostButton>
             ))}
@@ -61,7 +61,7 @@ export default function CIPage() {
         <Card>
           <h2 className="font-semibold text-ink">排查建议</h2>
           {(selected?.jobs?.length ?? 0) > 0 && (
-            <div className="mt-3 rounded-md border border-line bg-panel p-3 text-xs leading-5 text-slate-700">
+            <div className="mt-3 rounded-md border border-line bg-panel p-3 text-xs leading-5 text-content">
               <div className="font-medium text-ink">失败 Job</div>
               {(selected?.jobs ?? [])
                 .filter((job) => job.conclusion === "failure")
@@ -69,7 +69,7 @@ export default function CIPage() {
                   <div key={job.name} className="mt-2">
                     <span className="font-medium">{job.name}</span>
                     {job.steps?.filter((step) => step.conclusion === "failure").map((step) => (
-                      <span key={step.name} className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">
+                      <span key={step.name} className="ml-2 rounded-full bg-warning-soft px-2 py-0.5 text-warning">
                         {step.name}
                       </span>
                     ))}
@@ -77,9 +77,9 @@ export default function CIPage() {
                 ))}
             </div>
           )}
-          {selected?.logs_text && <pre className="mt-3 max-h-44 overflow-auto rounded-md border border-line bg-panel p-3 text-xs text-slate-700">{selected.logs_text}</pre>}
+          {selected?.logs_text && <pre className="mt-3 max-h-44 overflow-auto rounded-md border border-line bg-panel p-3 text-xs text-content">{selected.logs_text}</pre>}
           <PrimaryButton onClick={analyze} disabled={!selected} className="mt-4">分析失败原因</PrimaryButton>
-          {analysis && <pre className="mt-4 max-h-[520px] overflow-auto rounded-md border border-slate-800 bg-slate-950 p-4 text-xs text-slate-100">{analysis}</pre>}
+          {analysis && <pre className="mt-4 max-h-[520px] overflow-auto rounded-md border border-line bg-terminal p-4 text-xs text-ink">{analysis}</pre>}
         </Card>
       </div>
     </>

@@ -48,7 +48,7 @@ def main() -> None:
     for port in (8001, 3000):
         with socket.socket() as sock:
             if sock.connect_ex(("127.0.0.1", port)) == 0:
-                raise RuntimeError(f"Port {port} is already in use. Stop the previous DevFlow run first.")
+                raise RuntimeError(f"Port {port} is already in use. Stop the previous RepoPilot AI run first.")
     RUNTIME.mkdir(exist_ok=True)
     subprocess.run([docker, "compose", "-f", "docker-compose.local.yml", "up", "-d", "--wait"],
                    cwd=ROOT, check=True)
@@ -68,14 +68,14 @@ def main() -> None:
             children.append(child)
             wait_for(url, child)
             print(f"{name} ready: {url}", flush=True)
-        print("DevFlow AI is running: http://127.0.0.1:3000", flush=True)
+        print("RepoPilot AI is running: http://127.0.0.1:3000", flush=True)
         print("API documentation: http://127.0.0.1:8001/docs", flush=True)
         print(f"Logs: {RUNTIME}\nStop this run to stop the frontend and backend.", flush=True)
         while all(child.poll() is None for child in children):
             time.sleep(1)
         raise RuntimeError("A service stopped unexpectedly; inspect its log.")
     except KeyboardInterrupt:
-        print("Stopping DevFlow frontend and backend...", flush=True)
+        print("Stopping RepoPilot AI frontend and backend...", flush=True)
     finally:
         for child in children:
             if child.poll() is None:

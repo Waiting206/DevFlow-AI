@@ -89,7 +89,7 @@ export default function CodeGraphPage() {
       <PageTitle title="代码图谱" description="检索代码 symbol、调用/导入关系，并为 PR 准备独立分支快照。" />
       <div className="grid gap-4 lg:grid-cols-[380px_1fr]">
         <Card>
-          <label className="text-sm font-medium text-slate-700">
+          <label className="text-sm font-medium text-content">
             仓库
             <select
               className="mt-2 w-full rounded-md border border-line px-3 py-2"
@@ -107,7 +107,7 @@ export default function CodeGraphPage() {
               ))}
             </select>
           </label>
-          <label className="mt-4 block text-sm font-medium text-slate-700">
+          <label className="mt-4 block text-sm font-medium text-content">
             搜索 symbol / path
             <input className="mt-2 w-full rounded-md border border-line px-3 py-2" value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
@@ -115,7 +115,7 @@ export default function CodeGraphPage() {
             搜索图谱
           </PrimaryButton>
           <div className="mt-6 border-t border-line pt-4">
-            <label className="text-sm font-medium text-slate-700">
+            <label className="text-sm font-medium text-content">
               PR 分支快照
               <select
                 className="mt-2 w-full rounded-md border border-line px-3 py-2"
@@ -137,13 +137,13 @@ export default function CodeGraphPage() {
               准备 PR 快照
             </PrimaryButton>
             {snapshot && (
-              <div className="mt-3 rounded-md border border-line bg-panel p-3 text-sm text-slate-700">
+              <div className="mt-3 rounded-md border border-line bg-panel p-3 text-sm text-content">
                 <div className="font-medium text-ink">{snapshot.snapshot_name || "PR 分支快照"}</div>
                 <div className="mt-1">状态：{snapshot.status}</div>
                 {snapshot.branch && <div>分支：{snapshot.branch}</div>}
                 {snapshot.commit_sha && <div>Commit：{snapshot.commit_sha.slice(0, 12)}</div>}
                 {typeof snapshot.indexed_symbols === "number" && <div>代码图符号：{snapshot.indexed_symbols}</div>}
-                {snapshot.message && <div className="mt-1 text-slate-500">{snapshot.message}</div>}
+                {snapshot.message && <div className="mt-1 text-muted">{snapshot.message}</div>}
               </div>
             )}
           </div>
@@ -156,22 +156,22 @@ export default function CodeGraphPage() {
               {(graph?.symbols || []).map((item) => (
                 <div key={item.id} className="rounded-md border border-line bg-panel px-3 py-2 text-sm">
                   <span className="font-medium text-ink">{item.name}</span>
-                  <span className="ml-2 text-slate-500">
+                  <span className="ml-2 text-muted">
                     {item.kind} · {item.path}:{item.start_line || 1}
                     {item.pr_number ? ` · PR #${item.pr_number}` : ""}
                   </span>
                 </div>
               ))}
-              {!graph && <div className="text-sm text-slate-500">索引代码后可搜索 symbol。</div>}
+              {!graph && <div className="text-sm text-muted">索引代码后可搜索 symbol。</div>}
             </div>
           </Card>
           <Card>
             <h2 className="font-semibold text-ink">Relations</h2>
             <div className="mt-3 grid gap-2">
               {(graph?.relations || []).slice(0, 30).map((item) => (
-                <div key={item.id} className="rounded-md border border-line bg-panel px-3 py-2 text-sm text-slate-700">
+                <div key={item.id} className="rounded-md border border-line bg-panel px-3 py-2 text-sm text-content">
                   {item.source_name || item.path || "module"} - {item.relation_type} - {item.target_name}
-                  {item.pr_number ? <span className="ml-2 text-slate-500">PR #{item.pr_number}</span> : null}
+                  {item.pr_number ? <span className="ml-2 text-muted">PR #{item.pr_number}</span> : null}
                 </div>
               ))}
             </div>
@@ -179,7 +179,7 @@ export default function CodeGraphPage() {
           <Card>
             <h2 className="font-semibold text-ink">相关代码片段</h2>
             {(graph?.documents || []).map((item) => (
-              <pre key={item.id} className="mt-3 max-h-48 overflow-auto rounded-md border border-slate-800 bg-slate-950 p-3 text-xs text-slate-100">
+              <pre key={item.id} className="mt-3 max-h-48 overflow-auto rounded-md border border-line bg-terminal p-3 text-xs text-ink">
                 {item.title}
                 {"\n\n"}
                 {item.snippet}

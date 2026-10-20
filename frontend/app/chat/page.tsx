@@ -54,7 +54,7 @@ export default function ChatPage() {
       />
       <Card>
         <select
-          className="mb-3 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+          className="mb-3 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm"
           value={repoId}
           onChange={(event) => setRepoId(event.target.value)}
         >
@@ -63,17 +63,17 @@ export default function ChatPage() {
           ))}
         </select>
         <textarea
-          className="h-32 w-full rounded-md border border-line bg-white px-3 py-3 text-sm leading-6 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+          className="h-32 w-full rounded-md border border-line bg-surface px-3 py-3 text-sm leading-6 outline-none transition focus:border-accent-line focus:ring-2 focus:ring-accent"
           value={message}
           onChange={(event) => setMessage(event.target.value)}
         />
 
-        <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted">
           {samples.map((sample) => (
             <button
               key={sample}
               onClick={() => setMessage(sample)}
-              className="rounded-full border border-line bg-panel px-3 py-1.5 transition hover:border-teal-200 hover:bg-teal-50"
+              className="rounded-full border border-line bg-panel px-3 py-1.5 transition hover:border-accent-line hover:bg-accent-soft"
             >
               {sample}
             </button>
@@ -84,7 +84,7 @@ export default function ChatPage() {
           {loading ? "Analyzing..." : "Ask Agent"}
         </PrimaryButton>
 
-        {result && <pre className="mt-4 max-h-[560px] overflow-auto rounded-md border border-slate-800 bg-slate-950 p-4 text-xs text-slate-100">{result}</pre>}
+        {result && <pre className="mt-4 max-h-[560px] overflow-auto rounded-md border border-line bg-terminal p-4 text-xs text-ink">{result}</pre>}
       </Card>
     </>
   );

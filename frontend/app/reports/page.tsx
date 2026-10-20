@@ -60,10 +60,10 @@ export default function ReportsPage() {
       <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
         <Card>
           <div className="grid gap-4">
-            <label className="text-sm font-medium text-slate-700">
+            <label className="text-sm font-medium text-content">
               仓库
               <select
-                className="mt-2 w-full rounded-md border border-line bg-white px-3 py-2 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                className="mt-2 w-full rounded-md border border-line bg-surface px-3 py-2 outline-none transition focus:border-accent-line focus:ring-2 focus:ring-accent"
                 value={repoId}
                 onChange={(event) => setRepoId(event.target.value)}
               >
@@ -75,21 +75,21 @@ export default function ReportsPage() {
               </select>
             </label>
 
-            <label className="text-sm font-medium text-slate-700">
+            <label className="text-sm font-medium text-content">
               开始日期
               <input
                 type="date"
-                className="mt-2 w-full rounded-md border border-line bg-white px-3 py-2 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                className="mt-2 w-full rounded-md border border-line bg-surface px-3 py-2 outline-none transition focus:border-accent-line focus:ring-2 focus:ring-accent"
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
               />
             </label>
 
-            <label className="text-sm font-medium text-slate-700">
+            <label className="text-sm font-medium text-content">
               结束日期
               <input
                 type="date"
-                className="mt-2 w-full rounded-md border border-line bg-white px-3 py-2 outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                className="mt-2 w-full rounded-md border border-line bg-surface px-3 py-2 outline-none transition focus:border-accent-line focus:ring-2 focus:ring-accent"
                 value={endDate}
                 onChange={(event) => setEndDate(event.target.value)}
               />
@@ -104,9 +104,9 @@ export default function ReportsPage() {
         <Card>
           <h2 className="font-semibold text-ink">Markdown 周报</h2>
           {report ? (
-            <pre className="mt-4 max-h-[640px] overflow-auto rounded-md border border-slate-800 bg-slate-950 p-4 text-sm leading-7 text-slate-100">{report}</pre>
+            <pre className="mt-4 max-h-[640px] overflow-auto rounded-md border border-line bg-terminal p-4 text-sm leading-7 text-ink">{report}</pre>
           ) : (
-            <div className="mt-4 rounded-md border border-line bg-panel p-4 text-sm text-slate-600">选择仓库和时间范围后生成周报。</div>
+            <div className="mt-4 rounded-md border border-line bg-panel p-4 text-sm text-muted">选择仓库和时间范围后生成周报。</div>
           )}
         </Card>
       </div>

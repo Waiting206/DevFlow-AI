@@ -37,14 +37,14 @@ export default function IssuesPage() {
         <Card>
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-ink">Issue 列表</h2>
-            <span className="rounded-full bg-panel px-2.5 py-1 text-xs text-slate-500">{issues.length} 条</span>
+            <span className="rounded-full bg-panel px-2.5 py-1 text-xs text-muted">{issues.length} 条</span>
           </div>
           <div className="mt-4 space-y-2">
             {issues.map((issue) => (
-              <GhostButton key={issue.id} onClick={() => setSelected(issue)} className={selected?.id === issue.id ? "border-teal-300 bg-teal-50 text-teal-900" : ""}>
+              <GhostButton key={issue.id} onClick={() => setSelected(issue)} className={selected?.id === issue.id ? "border-accent-line bg-accent-soft text-accent-text" : ""}>
                 <div className="flex items-center justify-between gap-3">
                   <span>#{issue.number} {issue.title}</span>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{issue.state}</span>
+                  <span className="rounded-full bg-elevated px-2 py-0.5 text-xs">{issue.state}</span>
                 </div>
               </GhostButton>
             ))}
@@ -54,13 +54,13 @@ export default function IssuesPage() {
         <Card>
           <h2 className="font-semibold text-ink">分析结果</h2>
           {selected && (
-            <div className="mt-3 rounded-md bg-panel p-3 text-sm leading-6 text-slate-600">
+            <div className="mt-3 rounded-md bg-panel p-3 text-sm leading-6 text-muted">
               <div className="font-medium text-ink">#{selected.number} {selected.title}</div>
               <div className="mt-1">{selected.body || "暂无正文"}</div>
             </div>
           )}
           <PrimaryButton onClick={analyze} disabled={!selected} className="mt-4">分析当前 Issue</PrimaryButton>
-          {analysis && <pre className="mt-4 max-h-[520px] overflow-auto rounded-md border border-slate-800 bg-slate-950 p-4 text-xs text-slate-100">{analysis}</pre>}
+          {analysis && <pre className="mt-4 max-h-[520px] overflow-auto rounded-md border border-line bg-terminal p-4 text-xs text-ink">{analysis}</pre>}
         </Card>
       </div>
     </>
