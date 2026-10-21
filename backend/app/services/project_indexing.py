@@ -15,7 +15,7 @@ from app.db.models import ProjectIndexState, Repository
 from app.db.session import SessionLocal
 from app.services.knowledge_graph import rebuild_knowledge_graph
 from app.services.rag.chunking import chunk_document
-from app.services.code_analysis import _repo_checkout_path, _stored_checkout_path
+from app.services.code_analysis import _repo_checkout_path, _stored_checkout_path, repository_checkout_state
 from app.services.rag.vector_store import DocumentPayload, replace_documents, stable_source_id
 
 PROJECT_INDEX_SOURCE_TYPES = ["project_overview", "project_doc", "project_manifest"]
@@ -315,7 +315,9 @@ def _get_or_create_state(db: Session, repo_id: uuid.UUID) -> ProjectIndexState:
 
 
 def _state_payload(repo: Repository, row: ProjectIndexState | None, fingerprint: str | None = None) -> dict[str, Any]:
-    current_fingerprint = fingerprint if fingerprint is not None else project_fingerprint(repo)
+    checkout = repository_checkout_state(repo)
+    availability = {"checkout": checkout, "can_scan": checkout["status"] == "ready"}
+    current_fingerprint = fingerprint if fingerprint is not None else project_fingerprint(repo) if availability["can_scan"] else ""
     if row is None:
         return {
             "repo_id": repo.id,
@@ -327,8 +329,14 @@ def _state_payload(repo: Repository, row: ProjectIndexState | None, fingerprint:
             "summary_json": None,
             "snoozed_until": None,
             "last_scan_at": None,
+            **availability,
         }
     status = row.status if row.status in PROJECT_INDEX_STATUSES else "missing"
+    error_message = row.error_message
+    updated = _aware(row.updated_at)
+    if status == "building" and updated and _now() - updated > timedelta(minutes=15):
+        status = "failed"
+        error_message = "上次资料扫描未完成或已中断，可以重新扫描。"
     if status == "ready" and current_fingerprint and row.fingerprint != current_fingerprint:
         status = "stale"
     return {
@@ -337,10 +345,11 @@ def _state_payload(repo: Repository, row: ProjectIndexState | None, fingerprint:
         "fingerprint": row.fingerprint or current_fingerprint,
         "docs_indexed": row.docs_indexed or 0,
         "docs_total": row.docs_total or 0,
-        "error_message": row.error_message,
+        "error_message": error_message,
         "summary_json": row.summary_json,
         "snoozed_until": row.snoozed_until,
         "last_scan_at": row.last_scan_at,
+        **availability,
     }
 
 
@@ -490,6 +499,12 @@ def _payloads_for_candidates(repo: Repository, root: Path, candidates: list[Proj
 
 def scan_project_index(db: Session, repo: Repository) -> dict[str, Any]:
     row = _get_or_create_state(db, repo.id)
+    checkout = repository_checkout_state(repo)
+    if checkout["status"] != "ready":
+        row.status = "failed"
+        row.error_message = checkout["error_message"] or "源码尚未准备完成，请先等待下载完成或重试下载。"
+        db.commit()
+        return _state_payload(repo, row)
     fp = project_fingerprint(repo)
     row.status = "building"
     row.fingerprint = fp

@@ -13,11 +13,11 @@ from sqlalchemy.orm import Session
 
 from app.db.models import ActionDraft, AgentRun, AgentTaskRun, AgentWorkflowRun, AnalysisResult, AuditLog, ChatFeedback, ChatMessage, ChatSession, CodeRelation, CodeSymbol, Conversation, ConversationMemory, Document, EvidenceItem, Issue, KnowledgeBaseConfig, KnowledgeGraphEdge, KnowledgeSourceDocument, MemoryCandidate, PRFile, PRReviewComment, ProjectIndexState, PullRequest, RecallEvent, Repository, RetrievalTestRun, ThreadMemory, WorkflowRun, Workspace
 from app.db.session import get_db
-from app.schemas.repos import RepoConnectRequest, RepoConnectResponse, RepoResponse, RepoSyncRequest, RepoSyncResponse
+from app.schemas.repos import RepoCheckoutResponse, RepoConnectRequest, RepoConnectResponse, RepoResponse, RepoSyncRequest, RepoSyncResponse
 from app.core.config import settings
 from app.core.security import encrypt_token
 from app.services.github.client import GitHubClient
-from app.services.code_analysis import sync_repository_code_analysis_by_id
+from app.services.code_analysis import queue_repository_checkout, repository_checkout_state, sync_repository_code_analysis_by_id
 from app.services.rag.vector_store import delete_milvus_documents
 from app.services.repos_sync import sync_repository
 #仓库链接入口
@@ -239,9 +239,11 @@ async def connect_repo(payload: RepoConnectRequest, background_tasks: Background
             ),
         )
         # Issue/PR/CI 已同步完成；代码 checkout 和代码图在响应后独立处理。
-        background_tasks.add_task(sync_repository_code_analysis_by_id, repo.id)
+        if queue_repository_checkout(db, repo):
+            background_tasks.add_task(sync_repository_code_analysis_by_id, repo.id)
     elif fallback_message:
-        background_tasks.add_task(sync_repository_code_analysis_by_id, repo.id)
+        if queue_repository_checkout(db, repo):
+            background_tasks.add_task(sync_repository_code_analysis_by_id, repo.id)
     return RepoConnectResponse(
         repo_id=repo.id,
         full_name=repo.full_name,
@@ -263,6 +265,7 @@ async def connect_repo(payload: RepoConnectRequest, background_tasks: Background
         ),
         sync_status=sync_result.status if sync_result else ("fallback" if fallback_message else "skipped"),
         synced=sync_result.synced if sync_result else {"issues": 0, "pull_requests": 0, "workflow_runs": 0},
+        checkout=repository_checkout_state(repo),
     )
 
 
@@ -287,8 +290,24 @@ async def sync_repo(
     if repo is None:
         raise HTTPException(status_code=404, detail="未找到仓库")
     result = await sync_repository(db, repo, payload)
-    background_tasks.add_task(sync_repository_code_analysis_by_id, repo.id)
+    if queue_repository_checkout(db, repo):
+        background_tasks.add_task(sync_repository_code_analysis_by_id, repo.id)
     return result
+
+
+@router.post("/{repo_id}/checkout/retry", response_model=RepoCheckoutResponse, status_code=202)
+async def retry_repo_checkout(
+    repo_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> dict:
+    repo = db.get(Repository, repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail="未找到仓库")
+    if not queue_repository_checkout(db, repo):
+        raise HTTPException(status_code=409, detail="源码准备或资料扫描正在进行，请等待完成后重试。")
+    background_tasks.add_task(sync_repository_code_analysis_by_id, repo.id)
+    return repository_checkout_state(repo)
 
 
 @router.post("/{repo_id}/select")

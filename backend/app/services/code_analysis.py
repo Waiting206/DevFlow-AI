@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import uuid
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote, urlparse, urlunparse
 
@@ -14,10 +15,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import decrypt_token
-from app.db.models import CodeRelation, CodeSymbol, Document, Repository
+from app.db.models import CodeRelation, CodeSymbol, Document, ProjectIndexState, Repository
 from app.db.session import SessionLocal
 
 logger = logging.getLogger(__name__)
+_CHECKOUT_LOCKS: dict[uuid.UUID, asyncio.Lock] = {}
+_CHECKOUT_STALE_AFTER = timedelta(minutes=15)
 
 SKIP_DIRS = {
     ".git",
@@ -136,16 +139,96 @@ def _clone_url_with_token(url: str, token: str | None) -> str:
     return urlunparse(parsed._replace(netloc=f"x-access-token:{safe_token}@{parsed.netloc}"))
 
 
+def redact_git_secrets(message: str) -> str:
+    message = re.sub(r"(https?://)[^/\s]+@", r"\1[REDACTED]@", message)
+    message = re.sub(r"\b(?:github_pat_|gh[pousr]_)[A-Za-z0-9_]+\b", "[REDACTED]", message)
+    return re.sub(r"(Authorization:\s*(?:Basic|Bearer)\s+)\S+", r"\1[REDACTED]", message, flags=re.IGNORECASE)
+
+
+def git_error_message(exc: Exception) -> str:
+    if isinstance(exc, subprocess.CalledProcessError):
+        message = exc.stderr or f"Git 操作失败（退出码 {exc.returncode}）"
+    elif isinstance(exc, subprocess.TimeoutExpired):
+        message = f"Git 操作超过 {exc.timeout} 秒未完成，请检查网络后重试。"
+    else:
+        message = str(exc)
+    if isinstance(message, bytes):
+        message = message.decode("utf-8", errors="replace")
+    return redact_git_secrets(message.strip())[:2000]
+
+
+def _checkout_has_head(path: Path) -> bool:
+    return path.is_dir() and _is_git_work_tree(path) and bool(_git_text(["rev-parse", "--verify", "HEAD"], path))
+
+
+def repository_checkout_state(repo: Repository) -> dict:
+    """Readiness is independent of Issue/PR sync and the document scan state."""
+    path = _stored_checkout_path(repo) or _repo_checkout_path(repo)
+    status = getattr(repo, "checkout_status", None) or "pending"
+    error = getattr(repo, "checkout_error", None)
+    updated = getattr(repo, "checkout_updated_at", None)
+    if status == "downloading":
+        at = updated.replace(tzinfo=timezone.utc) if updated and updated.tzinfo is None else updated
+        if at and datetime.now(timezone.utc) - at > _CHECKOUT_STALE_AFTER:
+            status, error = "failed", "上次源码准备未完成或已中断，请重试下载。"
+    elif status != "failed":
+        # Local paths have already been validated by the connect endpoint. This
+        # also keeps existing local/document-only installations compatible.
+        local_ready = getattr(repo, "checkout_mode", None) == "local" and path.is_dir()
+        if local_ready or _checkout_has_head(path):
+            status, error = "ready", None
+        elif status == "ready":
+            status, error = "failed", "本地源码不存在或检出不完整，请重新下载。"
+        else:
+            status = "pending"
+    return {
+        "repo_id": repo.id,
+        "status": status,
+        "error_message": redact_git_secrets(error) if error else None,
+        "local_path": str(path) if path.is_dir() else None,
+        "updated_at": updated,
+    }
+
+
+def queue_repository_checkout(db: Session, repo: Repository) -> bool:
+    active = _CHECKOUT_LOCKS.get(repo.id)
+    if active is not None and active.locked():
+        return False
+    if repository_checkout_state(repo)["status"] == "downloading":
+        return False
+    index = db.query(ProjectIndexState).filter_by(repo_id=repo.id).one_or_none()
+    if index is not None and index.status == "building":
+        at = index.updated_at
+        at = at.replace(tzinfo=timezone.utc) if at and at.tzinfo is None else at
+        if not at or datetime.now(timezone.utc) - at <= _CHECKOUT_STALE_AFTER:
+            return False
+    repo.checkout_status = "downloading"
+    repo.checkout_error = None
+    repo.checkout_updated_at = datetime.now(timezone.utc)
+    # Persist before returning the response or starting the background task.
+    db.commit()
+    return True
+
+
 def _run_git(args: list[str], cwd: Path | None = None) -> None:
-    subprocess.run(
-        ["git", *args],
-        cwd=str(cwd) if cwd else None,
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        text=True,
-        timeout=180,
-    )
+    try:
+        subprocess.run(
+            ["git", *args],
+            cwd=str(cwd) if cwd else None,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=180,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise subprocess.CalledProcessError(
+            exc.returncode,
+            [redact_git_secrets(str(arg)) for arg in ["git", *args]],
+            stderr=git_error_message(exc),
+        ) from None
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(git_error_message(exc)) from None
 
 
 def _is_git_work_tree(path: Path) -> bool:
@@ -185,7 +268,7 @@ def _sync_checkout(repo: Repository, token: str | None) -> Path:
             _run_git(["checkout", branch], cwd=target)
             _run_git(["pull", "--ff-only", "origin", branch], cwd=target)
         except subprocess.CalledProcessError as exc:
-            logger.warning("更新现有 checkout %s 失败，将使用缓存文件：%s", target, (exc.stderr or exc).strip())
+            logger.warning("更新现有 checkout %s 失败，将使用缓存文件：%s", target, git_error_message(exc))
         return target
 
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -372,9 +455,28 @@ def purge_legacy_code_documents(db: Session, repo_id: uuid.UUID | None = None) -
 
 
 async def sync_repository_code_analysis(db: Session, repo: Repository) -> int:
-    token = decrypt_token(repo.github_token_encrypted, settings.token_encryption_key) if repo.github_token_encrypted else None
-    # Git 操作及后续文件扫描放入线程，避免直接阻塞异步请求处理。
-    checkout_path = await asyncio.to_thread(_sync_checkout, repo, token)
+    repo.checkout_status = "downloading"
+    repo.checkout_error = None
+    repo.checkout_updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(repo)
+    try:
+        token = decrypt_token(repo.github_token_encrypted, settings.token_encryption_key) if repo.github_token_encrypted else None
+        checkout_path = await asyncio.to_thread(_sync_checkout, repo, token)
+        if not _checkout_has_head(checkout_path):
+            raise RuntimeError("源码检出不完整，请检查下载错误后重试。")
+    except Exception as exc:
+        db.rollback()
+        repo.checkout_status = "failed"
+        repo.checkout_error = git_error_message(exc)
+        repo.checkout_updated_at = datetime.now(timezone.utc)
+        db.commit()
+        raise
+    repo.checkout_status = "ready"
+    repo.checkout_error = None
+    repo.checkout_updated_at = datetime.now(timezone.utc)
+    repo.local_path = str(checkout_path)
+    db.commit()
     branch = repo.default_branch or _git_text(["branch", "--show-current"], checkout_path) or "main"
     commit_sha = _git_text(["rev-parse", "HEAD"], checkout_path)
     symbol_count = await asyncio.to_thread(
@@ -392,6 +494,14 @@ async def sync_repository_code_analysis(db: Session, repo: Repository) -> int:
 
 
 async def sync_repository_code_analysis_by_id(repo_id: uuid.UUID) -> int | None:
+    lock = _CHECKOUT_LOCKS.setdefault(repo_id, asyncio.Lock())
+    if lock.locked():
+        return None
+    async with lock:
+        return await _sync_repository_code_analysis_by_id(repo_id)
+
+
+async def _sync_repository_code_analysis_by_id(repo_id: uuid.UUID) -> int | None:
     db = SessionLocal()
     try:
         repo = db.get(Repository, repo_id)
@@ -400,7 +510,7 @@ async def sync_repository_code_analysis_by_id(repo_id: uuid.UUID) -> int | None:
         try:
             return await sync_repository_code_analysis(db, repo)
         except Exception as exc:
-            logger.warning("Failed to sync repository code analysis for %s: %s", repo_id, exc)
+            logger.warning("Failed to sync repository code analysis for %s: %s", repo_id, git_error_message(exc))
             return None
     finally:
         db.close()

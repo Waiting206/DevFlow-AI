@@ -3,6 +3,7 @@ from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+from app.schemas.repos import RepoCheckoutResponse
 
 
 class ProjectIndexStateResponse(BaseModel):
@@ -15,6 +16,8 @@ class ProjectIndexStateResponse(BaseModel):
     summary_json: dict[str, Any] | None = None
     snoozed_until: datetime | None = None
     last_scan_at: datetime | None = None
+    checkout: RepoCheckoutResponse | None = None
+    can_scan: bool = False
 
 
 class ProjectIndexScanResponse(BaseModel):

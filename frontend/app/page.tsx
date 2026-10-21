@@ -40,6 +40,7 @@ import type { Repository } from "@/lib/types";
 import { BrandMark } from "@/components/ui/brand-mark";
 import { PilotBackdrop } from "@/components/ui/pilot-backdrop";
 import { FeedbackControls, type ChatFeedbackRecord } from "@/components/feedback-controls";
+import { RepositoryIndexControls } from "@/components/repository-index-controls";
 
 type Issue = {
   id: string;
@@ -485,6 +486,8 @@ type ProjectIndexState = {
   summary_json?: ProjectIndexSummary | null;
   snoozed_until?: string | null;
   last_scan_at?: string | null;
+  can_scan?: boolean;
+  checkout?: { status: string; error_message?: string | null } | null;
 };
 
 type RecallEvent = {
@@ -1478,12 +1481,17 @@ export default function DashboardPage() {
 
   async function startProjectIndexScan() {
     if (!selectedRepo) return;
+    if (!selectedProjectIndexState?.can_scan) {
+      setIndexActionError("请先等待源码准备完成，再扫描项目资料。");
+      return;
+    }
     const repoId = selectedRepo.id;
     setIndexActionError(null);
     setIndexScanningRepoId(repoId);
     setProjectIndexByRepo((items) => ({
       ...items,
       [repoId]: {
+        ...items[repoId],
         repo_id: repoId,
         status: "building",
         fingerprint: items[repoId]?.fingerprint ?? "",
@@ -2631,6 +2639,8 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
+          {selectedRepo && <RepositoryIndexControls key={selectedRepo.id} repoId={selectedRepo.id}
+            onUpdated={() => Promise.all([loadProjectIndexState(selectedRepo.id), loadProjectKnowledge(selectedRepo.id), loadKnowledgeGraph(selectedRepo.id)])} />}
           <div className="overview-metrics mt-2 grid grid-cols-2 gap-1.5 md:grid-cols-3 xl:grid-cols-6">
             <MetricCard icon={ListTodo} label="待处理 Issue" value={openIssues.length} />
             <MetricCard icon={GitPullRequest} label="待 Review PR" value={openPrs.length} />
@@ -2953,7 +2963,7 @@ export default function DashboardPage() {
                     </div>
                   );
                 })}
-                {selectedRepo && isEmptyConversation && selectedProjectIndexState && !indexSnoozed && selectedProjectIndexState.status !== "ready" && (
+                {selectedRepo && isEmptyConversation && selectedProjectIndexState?.can_scan && !indexSnoozed && selectedProjectIndexState.status !== "ready" && (
                   <MemoryIndexPromptCard
                     repo={selectedRepo}
                     state={selectedProjectIndexState}

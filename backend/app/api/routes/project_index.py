@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Repository
 from app.db.session import get_db
+from app.services.code_analysis import repository_checkout_state
 from app.schemas.project_index import (
     ProjectIndexScanResponse,
     ProjectIndexSnoozeRequest,
@@ -41,6 +42,13 @@ async def start_memory_index_scan(
     db: Session = Depends(get_db),
 ) -> ProjectIndexScanResponse:
     repo = _repo_or_404(db, repo_id)
+    checkout = repository_checkout_state(repo)
+    if checkout["status"] != "ready":
+        detail = checkout["error_message"] or "源码尚未准备完成，请等待下载完成后再扫描。"
+        raise HTTPException(status_code=409, detail=detail)
+    state = get_project_index_state(db, repo)
+    if state["status"] == "building":
+        return ProjectIndexScanResponse(repo_id=repo.id, started=False, status="building")
     mark_project_index_building(db, repo)
     # 先返回 202 表示扫描已安排，完成或失败的结果需从状态接口查询。
     background_tasks.add_task(scan_project_index_by_id, repo.id)

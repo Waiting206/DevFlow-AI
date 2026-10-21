@@ -6,6 +6,7 @@ import { Folder, Trash2 } from "lucide-react";
 import { Card, PageTitle, PrimaryButton } from "@/components/ui/card";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api";
+import { RepositoryIndexControls } from "@/components/repository-index-controls";
 import type { Repository } from "@/lib/types";
 
 type RepoConnectResult = {
@@ -310,6 +311,7 @@ export default function ReposPage() {
                   <span className="rounded-full bg-panel px-2.5 py-1 text-xs text-muted">{selectedRepoId === item.id ? "当前查看" : "已连接"}</span>
                 </div>
                 <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted">{item.description || "暂无仓库描述"}</p>
+                <RepositoryIndexControls repoId={item.id} />
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button
                     onClick={() => selectRepo(item.id)}

@@ -40,6 +40,14 @@ class RepoResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RepoCheckoutResponse(BaseModel):
+    repo_id: UUID
+    status: str
+    error_message: str | None = None
+    local_path: str | None = None
+    updated_at: datetime | None = None
+
+
 class RepoConnectResponse(BaseModel):
     repo_id: UUID
     full_name: str
@@ -54,6 +62,7 @@ class RepoConnectResponse(BaseModel):
     message: str
     sync_status: str = "not_started"
     synced: dict[str, int] | None = None
+    checkout: RepoCheckoutResponse | None = None
 
 
 class RepoSyncRequest(BaseModel):

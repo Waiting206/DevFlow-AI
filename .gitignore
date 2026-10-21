@@ -18,6 +18,8 @@ htmlcov/
 frontend/node_modules/
 frontend/.next/
 frontend/.next-dev/
+frontend/.next-dev.lock
+frontend/.next-dev.lock.*.tmp
 frontend/out/
 frontend/tsconfig.tsbuildinfo
 npm-debug.log*

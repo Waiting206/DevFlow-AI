@@ -105,6 +105,12 @@ def create_app() -> FastAPI:
                     connection.execute(text("ALTER TABLE repositories ADD COLUMN local_path TEXT"))
                 if "checkout_mode" not in columns:
                     connection.execute(text("ALTER TABLE repositories ADD COLUMN checkout_mode VARCHAR(80) DEFAULT 'managed'"))
+                if "checkout_status" not in columns:
+                    connection.execute(text("ALTER TABLE repositories ADD COLUMN checkout_status VARCHAR(40) DEFAULT 'pending'"))
+                if "checkout_error" not in columns:
+                    connection.execute(text("ALTER TABLE repositories ADD COLUMN checkout_error TEXT"))
+                if "checkout_updated_at" not in columns:
+                    connection.execute(text("ALTER TABLE repositories ADD COLUMN checkout_updated_at TIMESTAMP WITH TIME ZONE"))
                 if "github_token_encrypted" not in columns:
                     connection.execute(text("ALTER TABLE repositories ADD COLUMN github_token_encrypted TEXT"))
         if "workflow_runs" in inspector.get_table_names():
