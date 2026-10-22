@@ -421,6 +421,7 @@ class WorkflowOrchestrator(BaseAgent):
                     "type": "workflow_spec",
                     "workflow_id": spec.workflow_id,
                     "goal": spec.goal,
+                    "planner_trace": spec.planner_trace,
                     "iteration": index,
                     "is_replan": index > 0,
                     "tasks": [

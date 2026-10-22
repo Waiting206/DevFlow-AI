@@ -1,0 +1,5022 @@
+{
+  "created_at": "2026-10-22T01:41:39.352384+00:00",
+  "mode": "live_model",
+  "model": "deepseek-v4-pro",
+  "temperature": 0,
+  "max_tokens": 4096,
+  "thinking": "disabled_for_official_deepseek",
+  "timeout_seconds": 20,
+  "concurrency": 2,
+  "prompt_version": "planner-v1.1",
+  "prompt_sha256": "153851dd5313edb847d67ada9ab7c940d2b7ca878f607410f25bb2869900cb62",
+  "fixture_sha256": "5abbccec3f3c9bdbe5767d2bdf2cef5f6c8aa80e316f82ab4a31c4a4a8617f0d",
+  "git_head": "3a0a3fbff20cbf5cf0b3c339f457b5c6b950220c",
+  "working_tree_contains_implementation_changes": true,
+  "scope": "Synthetic planning only; no diagnosis quality or general accuracy claim.",
+  "summary": {
+    "baseline": {
+      "runs": 20,
+      "passed": 4,
+      "invariants_passed": 20,
+      "llm_accepted": 0,
+      "fallbacks": 0,
+      "latency_median_ms": 0.01,
+      "latency_max_ms": 0.46,
+      "provider_prompt_tokens": 0,
+      "provider_completion_tokens": 0
+    },
+    "candidate": {
+      "runs": 20,
+      "passed": 19,
+      "invariants_passed": 20,
+      "llm_accepted": 20,
+      "fallbacks": 0,
+      "latency_median_ms": 4247.25,
+      "latency_max_ms": 6770.92,
+      "provider_prompt_tokens": 32818,
+      "provider_completion_tokens": 12278
+    }
+  },
+  "results": [
+    {
+      "case_id": "broad_merge",
+      "repeat": 1,
+      "message": "这个 PR 能不能合并？请做多 agent 协作 review，检查 Issue、PR 和 CI 风险。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "issue_analysis",
+        "pr_review",
+        "ci_debug"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_0d06df5b7274",
+          "goal": "这个 PR 能不能合并？请做多 agent 协作 review，检查 Issue、PR 和 CI 风险。",
+          "trigger_message": "这个 PR 能不能合并？请做多 agent 协作 review，检查 Issue、PR 和 CI 风险。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": true
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.671799Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.46,
+            "task_count": 4
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_094b3d571a25",
+          "goal": "这个 PR 能不能合并？请做多 agent 协作 review，检查 Issue、PR 和 CI 风险。",
+          "trigger_message": "这个 PR 能不能合并？请做多 agent 协作 review，检查 Issue、PR 和 CI 风险。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "汇总仓库当前的工程基线，为后续 Issue、PR 和 CI 分析提供共享证据。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作，以评估其对 PR 合并的影响。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议，并给出合并就绪度结论。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": true
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.671985Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 6361.31,
+            "task_count": 4,
+            "usage": {
+              "prompt_tokens": 1616,
+              "completion_tokens": 898,
+              "total_tokens": 2514
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "ci_only_with_exclusions",
+      "repeat": 1,
+      "message": "只排查 CI，不分析 Issue，也不审查 PR 风险。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "ci_debug"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "issue_analysis",
+            "pr_review"
+          ],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_5bea0f9f3c47",
+          "goal": "只排查 CI，不分析 Issue，也不审查 PR 风险。",
+          "trigger_message": "只排查 CI，不分析 Issue，也不审查 PR 风险。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.705571Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.05,
+            "task_count": 4
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_ada595312dc5",
+          "goal": "只排查 CI，不分析 Issue，也不审查 PR 风险。",
+          "trigger_message": "只排查 CI，不分析 Issue，也不审查 PR 风险。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。",
+            "CI 排查结论必须基于 Workflow Run #56 的实际日志和上下文，并明确是否阻塞合并或发布。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "汇总仓库当前的工程基线，为 CI 排查提供共享上下文。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.705622Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 4767.72,
+            "task_count": 2,
+            "usage": {
+              "prompt_tokens": 1591,
+              "completion_tokens": 539,
+              "total_tokens": 2130
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "pr_only_with_exclusions",
+      "repeat": 1,
+      "message": "只检查 PR 的 diff，暂不分析 Issue 和 CI。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "pr_review"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "ci_debug",
+            "issue_analysis"
+          ],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_7a5fe0068107",
+          "goal": "只检查 PR 的 diff，暂不分析 Issue 和 CI。",
+          "trigger_message": "只检查 PR 的 diff，暂不分析 Issue 和 CI。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713728Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.03,
+            "task_count": 4
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_052424694c03",
+          "goal": "只检查 PR 的 diff，暂不分析 Issue 和 CI。",
+          "trigger_message": "只检查 PR 的 diff，暂不分析 Issue 和 CI。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:56.474386Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 4064.57,
+            "task_count": 2,
+            "usage": {
+              "prompt_tokens": 1593,
+              "completion_tokens": 509,
+              "total_tokens": 2102
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "issue_only_with_exclusions",
+      "repeat": 1,
+      "message": "只分析 Issue 的优先级和负责人，不检查 PR，也不诊断 CI。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "issue_analysis"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "ci_debug",
+            "pr_review"
+          ],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_262cf683cc6b",
+          "goal": "只分析 Issue 的优先级和负责人，不检查 PR，也不诊断 CI。",
+          "trigger_message": "只分析 Issue 的优先级和负责人，不检查 PR，也不诊断 CI。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713766Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.02,
+            "task_count": 4
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_ca45bcfd08b9",
+          "goal": "只分析 Issue 的优先级和负责人，不检查 PR，也不诊断 CI。",
+          "trigger_message": "只分析 Issue 的优先级和负责人，不检查 PR，也不诊断 CI。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:58.033789Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 4259.23,
+            "task_count": 2,
+            "usage": {
+              "prompt_tokens": 1597,
+              "completion_tokens": 515,
+              "total_tokens": 2112
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "ci_semantic_request",
+      "repeat": 1,
+      "message": "自动化作业在依赖安装阶段退出，定位日志中的首个异常并列出验证步骤。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "ci_debug"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "pr_review"
+          ],
+          "missing_tasks": [
+            "ci_debug"
+          ]
+        },
+        "spec": {
+          "workflow_id": "workflow_674e7aadaea1",
+          "goal": "自动化作业在依赖安装阶段退出，定位日志中的首个异常并列出验证步骤。",
+          "trigger_message": "自动化作业在依赖安装阶段退出，定位日志中的首个异常并列出验证步骤。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34，因为它是当前最强的可用工程信号。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "ci_summary"
+                ],
+                "write_intent": false,
+                "reason": ""
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713788Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 2
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_21a679492c84",
+          "goal": "自动化作业在依赖安装阶段退出，定位日志中的首个异常并列出验证步骤。",
+          "trigger_message": "自动化作业在依赖安装阶段退出，定位日志中的首个异常并列出验证步骤。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。",
+            "CI 调试结果必须包含依赖安装阶段的首个异常日志片段和对应的验证步骤。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "汇总仓库当前的工程基线，为 CI 调试提供上下文。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56 的日志，定位依赖安装阶段的首个异常，并列出验证步骤。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:00.539472Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 4520.85,
+            "task_count": 2,
+            "usage": {
+              "prompt_tokens": 1599,
+              "completion_tokens": 548,
+              "total_tokens": 2147
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "issue_semantic_request",
+      "repeat": 1,
+      "message": "有人提了一个缺陷工单，请先评估紧急程度并建议指派对象。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "issue_analysis"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "pr_review"
+          ],
+          "missing_tasks": [
+            "issue_analysis"
+          ]
+        },
+        "spec": {
+          "workflow_id": "workflow_5b6c538829f1",
+          "goal": "有人提了一个缺陷工单，请先评估紧急程度并建议指派对象。",
+          "trigger_message": "有人提了一个缺陷工单，请先评估紧急程度并建议指派对象。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34，因为它是当前最强的可用工程信号。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "ci_summary"
+                ],
+                "write_intent": false,
+                "reason": ""
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713805Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 2
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_ef23c9c2596b",
+          "goal": "有人提了一个缺陷工单，请先评估紧急程度并建议指派对象。",
+          "trigger_message": "有人提了一个缺陷工单，请先评估紧急程度并建议指派对象。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。",
+            "缺陷工单的紧急程度评估有明确依据，指派建议有可核查的理由。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "汇总仓库当前的工程基线，为缺陷工单评估提供上下文。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析缺陷工单 Issue #12，评估紧急程度并建议指派对象。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:02.293298Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 4965.33,
+            "task_count": 2,
+            "usage": {
+              "prompt_tokens": 1597,
+              "completion_tokens": 529,
+              "total_tokens": 2126
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "overview_without_analysis",
+      "repeat": 1,
+      "message": "仅统计仓库概况，不进入任何专项分析，也不用检索历史资料。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "rag_search"
+          ],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_d6b67fd67f6d",
+          "goal": "仅统计仓库概况，不进入任何专项分析，也不用检索历史资料。",
+          "trigger_message": "仅统计仓库概况，不进入任何专项分析，也不用检索历史资料。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "rag_search",
+              "agent_name": "rag_context_agent",
+              "task_type": "rag_search",
+              "objective": "检索与目标相关的历史 Issue、PR、失败 CI 日志、项目文档和已批准知识。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "knowledge",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "rag_documents",
+                  "approved_memory",
+                  "uploaded_knowledge"
+                ],
+                "write_intent": false,
+                "reason": "历史证据可以避免重复分析和遗漏回归风险。"
+              },
+              "input_hint": {},
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713820Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 2
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_19077cd6e66b",
+          "goal": "仅统计仓库概况，不进入任何专项分析，也不用检索历史资料。",
+          "trigger_message": "仅统计仓库概况，不进入任何专项分析，也不用检索历史资料。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。",
+            "仅输出仓库概况，不包含任何专项分析或历史检索结果。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "汇总仓库当前的工程基线，仅统计概况，不进行专项分析。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:05.060962Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 3379.37,
+            "task_count": 1,
+            "usage": {
+              "prompt_tokens": 1729,
+              "completion_tokens": 370,
+              "total_tokens": 2099
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "history_only_with_exclusions",
+      "repeat": 1,
+      "message": "只从知识库找相似案例，不做 PR、Issue 或 CI 专项分析。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "rag_search"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "ci_debug",
+            "issue_analysis",
+            "pr_review"
+          ],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_ffd4632ad016",
+          "goal": "只从知识库找相似案例，不做 PR、Issue 或 CI 专项分析。",
+          "trigger_message": "只从知识库找相似案例，不做 PR、Issue 或 CI 专项分析。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            },
+            {
+              "id": "rag_search",
+              "agent_name": "rag_context_agent",
+              "task_type": "rag_search",
+              "objective": "检索与目标相关的历史 Issue、PR、失败 CI 日志、项目文档和已批准知识。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "knowledge",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "rag_documents",
+                  "approved_memory",
+                  "uploaded_knowledge"
+                ],
+                "write_intent": false,
+                "reason": "历史证据可以避免重复分析和遗漏回归风险。"
+              },
+              "input_hint": {},
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713840Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 5
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_0c7b2c014ea3",
+          "goal": "只从知识库找相似案例，不做 PR、Issue 或 CI 专项分析。",
+          "trigger_message": "只从知识库找相似案例，不做 PR、Issue 或 CI 专项分析。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "rag_search",
+              "agent_name": "rag_context_agent",
+              "task_type": "rag_search",
+              "objective": "检索与目标相关的历史 Issue、PR、失败 CI 日志、项目文档和已批准知识。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "knowledge",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "rag_documents",
+                  "approved_memory",
+                  "uploaded_knowledge"
+                ],
+                "write_intent": false,
+                "reason": "历史证据可以避免重复分析和遗漏回归风险。"
+              },
+              "input_hint": {},
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:07.259047Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 3730.98,
+            "task_count": 2,
+            "usage": {
+              "prompt_tokens": 1735,
+              "completion_tokens": 505,
+              "total_tokens": 2240
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "ordered_ci_then_pr",
+      "repeat": 1,
+      "message": "先诊断 CI，再审查 PR 的 diff，不分析 Issue。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "ci_debug",
+        "pr_review"
+      ],
+      "expected_edges": [
+        [
+          "ci_debug",
+          "pr_review"
+        ]
+      ],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": false,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "issue_analysis"
+          ],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_e3e1a0b45e51",
+          "goal": "先诊断 CI，再审查 PR 的 diff，不分析 Issue。",
+          "trigger_message": "先诊断 CI，再审查 PR 的 diff，不分析 Issue。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713859Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 4
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": true,
+          "dependencies_match": false,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_7eb912fc7a83",
+          "goal": "先诊断 CI，再审查 PR 的 diff，不分析 Issue。",
+          "trigger_message": "先诊断 CI，再审查 PR 的 diff，不分析 Issue。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "汇总仓库当前的工程基线，为后续 CI 诊断和 PR 审查提供共享证据。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:08.440715Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 6027.4,
+            "task_count": 3,
+            "usage": {
+              "prompt_tokens": 1593,
+              "completion_tokens": 684,
+              "total_tokens": 2277
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "explicit_targets_and_safety",
+      "repeat": 1,
+      "message": "分析 Issue #12、PR #34 和 CI run #56 后，生成外部评论草稿，等待我确认。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56,
+        "issue_explicit": true,
+        "pr_explicit": true,
+        "workflow_run_explicit": true,
+        "requires_safety": true
+      },
+      "expected_tasks": [
+        "repo_health",
+        "issue_analysis",
+        "pr_review",
+        "ci_debug",
+        "safety_review"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_bd75b5967106",
+          "goal": "分析 Issue #12、PR #34 和 CI run #56 后，生成外部评论草稿，等待我确认。",
+          "trigger_message": "分析 Issue #12、PR #34 和 CI run #56 后，生成外部评论草稿，等待我确认。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            },
+            {
+              "id": "safety_review",
+              "agent_name": "safety_agent",
+              "task_type": "safety_review",
+              "objective": "判断写入或外部发送风险，并生成安全草稿而不是执行副作用。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "external_action",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "user_request",
+                  "repository_snapshot"
+                ],
+                "write_intent": true,
+                "reason": "写入类操作必须经过人工确认。"
+              },
+              "input_hint": {},
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": true,
+          "created_at": "2026-10-22T01:40:51.713880Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 5
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_3ab442ebaa9f",
+          "goal": "分析 Issue #12、PR #34 和 CI run #56 后，生成外部评论草稿，等待我确认。",
+          "trigger_message": "分析 Issue #12、PR #34 和 CI run #56 后，生成外部评论草稿，等待我确认。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            },
+            {
+              "id": "safety_review",
+              "agent_name": "safety_agent",
+              "task_type": "safety_review",
+              "objective": "判断写入或外部发送风险，并生成安全草稿而不是执行副作用。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "external_action",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "user_request",
+                  "repository_snapshot"
+                ],
+                "write_intent": true,
+                "reason": "写入类操作必须经过人工确认。"
+              },
+              "input_hint": {},
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": true,
+          "created_at": "2026-10-22T01:41:10.990579Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 6770.92,
+            "task_count": 5,
+            "usage": {
+              "prompt_tokens": 1759,
+              "completion_tokens": 1017,
+              "total_tokens": 2776
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "broad_merge",
+      "repeat": 2,
+      "message": "这个 PR 能不能合并？请做多 agent 协作 review，检查 Issue、PR 和 CI 风险。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "issue_analysis",
+        "pr_review",
+        "ci_debug"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_63446ba0baab",
+          "goal": "这个 PR 能不能合并？请做多 agent 协作 review，检查 Issue、PR 和 CI 风险。",
+          "trigger_message": "这个 PR 能不能合并？请做多 agent 协作 review，检查 Issue、PR 和 CI 风险。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": true
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713900Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 4
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_c769291809ea",
+          "goal": "这个 PR 能不能合并？请做多 agent 协作 review，检查 Issue、PR 和 CI 风险。",
+          "trigger_message": "这个 PR 能不能合并？请做多 agent 协作 review，检查 Issue、PR 和 CI 风险。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "汇总仓库当前的工程基线，为后续 Issue、PR 和 CI 分析提供共享证据。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作，并评估其对 PR 合并的影响。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议，并给出合并就绪度结论。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": true
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:14.468557Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 6347.98,
+            "task_count": 4,
+            "usage": {
+              "prompt_tokens": 1616,
+              "completion_tokens": 898,
+              "total_tokens": 2514
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "ci_only_with_exclusions",
+      "repeat": 2,
+      "message": "只排查 CI，不分析 Issue，也不审查 PR 风险。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "ci_debug"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "issue_analysis",
+            "pr_review"
+          ],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_fc5b3207e93a",
+          "goal": "只排查 CI，不分析 Issue，也不审查 PR 风险。",
+          "trigger_message": "只排查 CI，不分析 Issue，也不审查 PR 风险。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713919Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 4
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_12a8bace6221",
+          "goal": "只排查 CI，不分析 Issue，也不审查 PR 风险。",
+          "trigger_message": "只排查 CI，不分析 Issue，也不审查 PR 风险。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:17.761921Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 3865.85,
+            "task_count": 2,
+            "usage": {
+              "prompt_tokens": 1591,
+              "completion_tokens": 516,
+              "total_tokens": 2107
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "pr_only_with_exclusions",
+      "repeat": 2,
+      "message": "只检查 PR 的 diff，暂不分析 Issue 和 CI。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "pr_review"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "ci_debug",
+            "issue_analysis"
+          ],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_9f539fa8eee5",
+          "goal": "只检查 PR 的 diff，暂不分析 Issue 和 CI。",
+          "trigger_message": "只检查 PR 的 diff，暂不分析 Issue 和 CI。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713937Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 4
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_b1b5454e97a6",
+          "goal": "只检查 PR 的 diff，暂不分析 Issue 和 CI。",
+          "trigger_message": "只检查 PR 的 diff，暂不分析 Issue 和 CI。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:20.817146Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 3821.6,
+            "task_count": 2,
+            "usage": {
+              "prompt_tokens": 1593,
+              "completion_tokens": 509,
+              "total_tokens": 2102
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "issue_only_with_exclusions",
+      "repeat": 2,
+      "message": "只分析 Issue 的优先级和负责人，不检查 PR，也不诊断 CI。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "issue_analysis"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "ci_debug",
+            "pr_review"
+          ],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_66b5d301d499",
+          "goal": "只分析 Issue 的优先级和负责人，不检查 PR，也不诊断 CI。",
+          "trigger_message": "只分析 Issue 的优先级和负责人，不检查 PR，也不诊断 CI。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713954Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 4
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_c7987d0a8058",
+          "goal": "只分析 Issue 的优先级和负责人，不检查 PR，也不诊断 CI。",
+          "trigger_message": "只分析 Issue 的优先级和负责人，不检查 PR，也不诊断 CI。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:21.628273Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 3769.92,
+            "task_count": 2,
+            "usage": {
+              "prompt_tokens": 1597,
+              "completion_tokens": 515,
+              "total_tokens": 2112
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "ci_semantic_request",
+      "repeat": 2,
+      "message": "自动化作业在依赖安装阶段退出，定位日志中的首个异常并列出验证步骤。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "ci_debug"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "pr_review"
+          ],
+          "missing_tasks": [
+            "ci_debug"
+          ]
+        },
+        "spec": {
+          "workflow_id": "workflow_1520a2e0d720",
+          "goal": "自动化作业在依赖安装阶段退出，定位日志中的首个异常并列出验证步骤。",
+          "trigger_message": "自动化作业在依赖安装阶段退出，定位日志中的首个异常并列出验证步骤。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34，因为它是当前最强的可用工程信号。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "ci_summary"
+                ],
+                "write_intent": false,
+                "reason": ""
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713969Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 2
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_8e0c69b4587b",
+          "goal": "自动化作业在依赖安装阶段退出，定位日志中的首个异常并列出验证步骤。",
+          "trigger_message": "自动化作业在依赖安装阶段退出，定位日志中的首个异常并列出验证步骤。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。",
+            "定位到依赖安装阶段日志中的首个异常，并给出可执行的验证步骤。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，定位依赖安装阶段日志中的首个异常，并列出验证步骤。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:24.639289Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 4235.27,
+            "task_count": 2,
+            "usage": {
+              "prompt_tokens": 1599,
+              "completion_tokens": 550,
+              "total_tokens": 2149
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "issue_semantic_request",
+      "repeat": 2,
+      "message": "有人提了一个缺陷工单，请先评估紧急程度并建议指派对象。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "issue_analysis"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "pr_review"
+          ],
+          "missing_tasks": [
+            "issue_analysis"
+          ]
+        },
+        "spec": {
+          "workflow_id": "workflow_8fe0e22cb57f",
+          "goal": "有人提了一个缺陷工单，请先评估紧急程度并建议指派对象。",
+          "trigger_message": "有人提了一个缺陷工单，请先评估紧急程度并建议指派对象。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34，因为它是当前最强的可用工程信号。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "ci_summary"
+                ],
+                "write_intent": false,
+                "reason": ""
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713982Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 2
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_4f368d3c040b",
+          "goal": "有人提了一个缺陷工单，请先评估紧急程度并建议指派对象。",
+          "trigger_message": "有人提了一个缺陷工单，请先评估紧急程度并建议指派对象。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。",
+            "缺陷工单的紧急程度评估和指派建议必须有明确证据支撑，并说明置信度。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "汇总仓库当前的工程基线，为缺陷工单的紧急程度和指派建议提供背景。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析缺陷工单 Issue #12，评估紧急程度并建议指派对象，输出分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:25.398669Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 4027.3,
+            "task_count": 2,
+            "usage": {
+              "prompt_tokens": 1597,
+              "completion_tokens": 550,
+              "total_tokens": 2147
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "overview_without_analysis",
+      "repeat": 2,
+      "message": "仅统计仓库概况，不进入任何专项分析，也不用检索历史资料。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "rag_search"
+          ],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_4a6e13ab26dd",
+          "goal": "仅统计仓库概况，不进入任何专项分析，也不用检索历史资料。",
+          "trigger_message": "仅统计仓库概况，不进入任何专项分析，也不用检索历史资料。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "rag_search",
+              "agent_name": "rag_context_agent",
+              "task_type": "rag_search",
+              "objective": "检索与目标相关的历史 Issue、PR、失败 CI 日志、项目文档和已批准知识。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "knowledge",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "rag_documents",
+                  "approved_memory",
+                  "uploaded_knowledge"
+                ],
+                "write_intent": false,
+                "reason": "历史证据可以避免重复分析和遗漏回归风险。"
+              },
+              "input_hint": {},
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.713995Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 2
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_5cfe72cd79d6",
+          "goal": "仅统计仓库概况，不进入任何专项分析，也不用检索历史资料。",
+          "trigger_message": "仅统计仓库概况，不进入任何专项分析，也不用检索历史资料。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。",
+            "仅输出仓库概况，不包含任何专项分析或历史检索结果。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "汇总仓库当前的工程基线，仅统计概况，不进行专项分析。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:28.875052Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 3174.29,
+            "task_count": 1,
+            "usage": {
+              "prompt_tokens": 1729,
+              "completion_tokens": 370,
+              "total_tokens": 2099
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "history_only_with_exclusions",
+      "repeat": 2,
+      "message": "只从知识库找相似案例，不做 PR、Issue 或 CI 专项分析。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "rag_search"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "ci_debug",
+            "issue_analysis",
+            "pr_review"
+          ],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_5e5b9d8f3ce3",
+          "goal": "只从知识库找相似案例，不做 PR、Issue 或 CI 专项分析。",
+          "trigger_message": "只从知识库找相似案例，不做 PR、Issue 或 CI 专项分析。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            },
+            {
+              "id": "rag_search",
+              "agent_name": "rag_context_agent",
+              "task_type": "rag_search",
+              "objective": "检索与目标相关的历史 Issue、PR、失败 CI 日志、项目文档和已批准知识。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "knowledge",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "rag_documents",
+                  "approved_memory",
+                  "uploaded_knowledge"
+                ],
+                "write_intent": false,
+                "reason": "历史证据可以避免重复分析和遗漏回归风险。"
+              },
+              "input_hint": {},
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.714043Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.04,
+            "task_count": 5
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_483ce0669340",
+          "goal": "只从知识库找相似案例，不做 PR、Issue 或 CI 专项分析。",
+          "trigger_message": "只从知识库找相似案例，不做 PR、Issue 或 CI 专项分析。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "rag_search",
+              "agent_name": "rag_context_agent",
+              "task_type": "rag_search",
+              "objective": "检索与目标相关的历史 Issue、PR、失败 CI 日志、项目文档和已批准知识。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "knowledge",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "rag_documents",
+                  "approved_memory",
+                  "uploaded_knowledge"
+                ],
+                "write_intent": false,
+                "reason": "历史证据可以避免重复分析和遗漏回归风险。"
+              },
+              "input_hint": {},
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:29.426409Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 3790.67,
+            "task_count": 2,
+            "usage": {
+              "prompt_tokens": 1735,
+              "completion_tokens": 505,
+              "total_tokens": 2240
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "ordered_ci_then_pr",
+      "repeat": 2,
+      "message": "先诊断 CI，再审查 PR 的 diff，不分析 Issue。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56
+      },
+      "expected_tasks": [
+        "repo_health",
+        "ci_debug",
+        "pr_review"
+      ],
+      "expected_edges": [
+        [
+          "ci_debug",
+          "pr_review"
+        ]
+      ],
+      "baseline": {
+        "assessment": {
+          "passed": false,
+          "exact_tasks": false,
+          "dependencies_match": false,
+          "invariants_passed": true,
+          "extra_tasks": [
+            "issue_analysis"
+          ],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_f6cc83bff0ba",
+          "goal": "先诊断 CI，再审查 PR 的 diff，不分析 Issue。",
+          "trigger_message": "先诊断 CI，再审查 PR 的 diff，不分析 Issue。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:40:51.714069Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 4
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_b02082c4d367",
+          "goal": "先诊断 CI，再审查 PR 的 diff，不分析 Issue。",
+          "trigger_message": "先诊断 CI，再审查 PR 的 diff，不分析 Issue。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。",
+            "CI 诊断结论必须明确是否阻塞合并或发布，并给出证据。",
+            "PR 审查必须覆盖 diff 内容，并指出与 CI 诊断相关的风险。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "汇总仓库当前的工程基线，为后续 CI 诊断和 PR 审查提供共享证据。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，判断失败原因及是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 的 diff，识别风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health",
+                "ci_debug"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": false,
+          "created_at": "2026-10-22T01:41:32.049883Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 5108.65,
+            "task_count": 3,
+            "usage": {
+              "prompt_tokens": 1593,
+              "completion_tokens": 734,
+              "total_tokens": 2327
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "explicit_targets_and_safety",
+      "repeat": 2,
+      "message": "分析 Issue #12、PR #34 和 CI run #56 后，生成外部评论草稿，等待我确认。",
+      "context": {
+        "repo_id": "repo-1",
+        "has_repo": true,
+        "has_issue": true,
+        "issue_id": "issue-1",
+        "issue_number": 12,
+        "has_pr": true,
+        "pr_id": "pr-1",
+        "pr_number": 34,
+        "has_ci_run": true,
+        "workflow_run_id": "run-1",
+        "workflow_run_number": 56,
+        "issue_explicit": true,
+        "pr_explicit": true,
+        "workflow_run_explicit": true,
+        "requires_safety": true
+      },
+      "expected_tasks": [
+        "repo_health",
+        "issue_analysis",
+        "pr_review",
+        "ci_debug",
+        "safety_review"
+      ],
+      "expected_edges": [],
+      "baseline": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_3b0644238220",
+          "goal": "分析 Issue #12、PR #34 和 CI run #56 后，生成外部评论草稿，等待我确认。",
+          "trigger_message": "分析 Issue #12、PR #34 和 CI run #56 后，生成外部评论草稿，等待我确认。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            },
+            {
+              "id": "safety_review",
+              "agent_name": "safety_agent",
+              "task_type": "safety_review",
+              "objective": "判断写入或外部发送风险，并生成安全草稿而不是执行副作用。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "external_action",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "user_request",
+                  "repository_snapshot"
+                ],
+                "write_intent": true,
+                "reason": "写入类操作必须经过人工确认。"
+              },
+              "input_hint": {},
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": true,
+          "created_at": "2026-10-22T01:40:51.714089Z",
+          "planner_trace": {
+            "source": "rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "fallback_reason": "disabled",
+            "latency_ms": 0.01,
+            "task_count": 5
+          }
+        }
+      },
+      "candidate": {
+        "assessment": {
+          "passed": true,
+          "exact_tasks": true,
+          "dependencies_match": true,
+          "invariants_passed": true,
+          "extra_tasks": [],
+          "missing_tasks": []
+        },
+        "spec": {
+          "workflow_id": "workflow_807018ded6f8",
+          "goal": "分析 Issue #12、PR #34 和 CI run #56 后，生成外部评论草稿，等待我确认。",
+          "trigger_message": "分析 Issue #12、PR #34 和 CI run #56 后，生成外部评论草稿，等待我确认。",
+          "acceptance_criteria": [
+            "所有被选中的 Agent 都必须停留在声明的 claim 范围内。",
+            "每个专用结果都应包含证据、置信度，或在证据不足时说明明确原因。",
+            "Observer 必须在最终综合前标出跨 Agent 冲突。",
+            "最终综合必须保留 What、Why、Tradeoff、Open Questions、Next Action。",
+            "PR 审查必须按 P1/P2/P3 分级；P1/P2 未解决前不能建议直接合入。",
+            "外部写操作必须返回草稿，并要求人工确认。"
+          ],
+          "tasks": [
+            {
+              "id": "repo_health",
+              "agent_name": "repo_health_agent",
+              "task_type": "repo_health",
+              "objective": "在专用分析前捕获仓库基线。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "repository",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "issues",
+                  "pull_requests",
+                  "workflow_runs"
+                ],
+                "write_intent": false,
+                "reason": "共享仓库快照可以让后续 Agent 结论有证据支撑。"
+              },
+              "input_hint": {},
+              "critical": false
+            },
+            {
+              "id": "issue_analysis",
+              "agent_name": "issue_analyst_agent",
+              "task_type": "issue_analysis",
+              "objective": "分析 Issue #12 的分诊结论、优先级、负责人、证据和下一步动作。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "issue",
+                "target_id": "issue-1",
+                "allowed_sources": [
+                  "issue",
+                  "similar_issues",
+                  "code",
+                  "documents",
+                  "team_members"
+                ],
+                "write_intent": false,
+                "reason": "判断负责人和优先级需要明确 Issue 范围。"
+              },
+              "input_hint": {
+                "issue_number": 12
+              },
+              "critical": false
+            },
+            {
+              "id": "pr_review",
+              "agent_name": "pr_review_agent",
+              "task_type": "pr_review",
+              "objective": "审查 PR #34 diff、风险、阻塞问题和测试建议。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "pull_request",
+                "target_id": "pr-1",
+                "allowed_sources": [
+                  "pull_request",
+                  "diff",
+                  "review_comments",
+                  "ci_summary",
+                  "documents"
+                ],
+                "write_intent": false,
+                "reason": "合并就绪度和风险判断需要明确 PR 范围。"
+              },
+              "input_hint": {
+                "pr_number": 34
+              },
+              "critical": false
+            },
+            {
+              "id": "ci_debug",
+              "agent_name": "ci_debug_agent",
+              "task_type": "ci_debug",
+              "objective": "分析 CI/Workflow Run #56，并判断是否阻塞合并或发布。",
+              "dependencies": [
+                "repo_health"
+              ],
+              "claim": {
+                "target_type": "workflow_run",
+                "target_id": "run-1",
+                "allowed_sources": [
+                  "workflow_run",
+                  "jobs",
+                  "logs",
+                  "recent_prs",
+                  "code"
+                ],
+                "write_intent": false,
+                "reason": "任何合并或就绪度结论都需要先看 CI 失败上下文。"
+              },
+              "input_hint": {
+                "workflow_run_number": 56
+              },
+              "critical": true
+            },
+            {
+              "id": "safety_review",
+              "agent_name": "safety_agent",
+              "task_type": "safety_review",
+              "objective": "判断写入或外部发送风险，并生成安全草稿而不是执行副作用。",
+              "dependencies": [],
+              "claim": {
+                "target_type": "external_action",
+                "target_id": "repo-1",
+                "allowed_sources": [
+                  "user_request",
+                  "repository_snapshot"
+                ],
+                "write_intent": true,
+                "reason": "写入类操作必须经过人工确认。"
+              },
+              "input_hint": {},
+              "critical": true
+            }
+          ],
+          "max_parallel_tasks": 3,
+          "requires_human_confirmation": true,
+          "created_at": "2026-10-22T01:41:33.217601Z",
+          "planner_trace": {
+            "source": "llm_with_rules",
+            "model": "deepseek-v4-pro",
+            "prompt_version": "planner-v1.1",
+            "merged_rule_tasks": [],
+            "latency_ms": 6133.93,
+            "task_count": 5,
+            "usage": {
+              "prompt_tokens": 1759,
+              "completion_tokens": 1017,
+              "total_tokens": 2776
+            }
+          }
+        }
+      }
+    }
+  ]
+}

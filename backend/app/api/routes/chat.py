@@ -1398,6 +1398,7 @@ async def _conversation_plan(payload: ChatRequest, db: Session) -> dict[str, Any
                 "type": "workflow_spec",
                 "workflow_id": spec.workflow_id,
                 "goal": spec.goal,
+                "planner_trace": spec.planner_trace,
                 "tasks": [
                     {
                         "id": task.id,

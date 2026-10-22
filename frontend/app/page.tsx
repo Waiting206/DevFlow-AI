@@ -116,6 +116,7 @@ type WorkflowPlan = {
   tasks: WorkflowPlanTask[];
   max_parallel_tasks?: number;
   requires_human_confirmation?: boolean;
+  planner_trace?: Record<string, unknown>;
   created_at?: string;
 };
 
@@ -800,6 +801,16 @@ function traceItemsFromAgentEvents(events: Array<Record<string, unknown>> = []):
       } else {
         items.push(result);
       }
+      return;
+    }
+    if (type === "workflow_spec" && !event.is_replan && contextString(contextRecord(event.planner_trace).source)) {
+      items.push({
+        id: `history-workflow-plan-${index}`,
+        kind: "tool",
+        title: `Planner · ${plannerSourceLabel(contextRecord(event.planner_trace))}`,
+        content: plannerTraceDescription(contextRecord(event.planner_trace)),
+        status: "done"
+      });
       return;
     }
     if (type === "workflow_replan") {
@@ -3149,6 +3160,24 @@ export default function DashboardPage() {
   );
 }
 
+function plannerSourceLabel(trace: Record<string, unknown>): string {
+  return trace.source === "llm_with_rules" ? "LLM 规划 + 规则约束" : trace.source === "rules_fallback" ? "规则兜底" : "规则规划";
+}
+
+function plannerTraceDescription(trace: Record<string, unknown>): string {
+  const reasons: Record<string, string> = {
+    missing_api_key: "模型未配置", timeout: "模型响应超时", empty_response: "模型返回为空",
+    llm_error: "模型调用失败", invalid_structure: "输出结构无效", truncated_response: "模型输出不完整"
+  };
+  const reason = contextString(trace.fallback_reason);
+  return [
+    contextString(trace.model),
+    typeof trace.latency_ms === "number" ? `${(trace.latency_ms / 1000).toFixed(2)} 秒` : "",
+    trace.source === "rules_fallback" ? `${reasons[reason] || "规划未通过规则校验"}，已使用原有规则` : "",
+    Array.isArray(trace.merged_rule_tasks) && trace.merged_rule_tasks.length ? `规则补齐 ${trace.merged_rule_tasks.length} 项必要任务` : ""
+  ].filter(Boolean).join(" · ");
+}
+
 function WorkflowPlanCard({
   plan,
   status,
@@ -3171,6 +3200,14 @@ function WorkflowPlanCard({
             <span className="rounded-md bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">{statusLabel}</span>
           </div>
           <div className="mt-1 line-clamp-2 text-muted">{plan.goal}</div>
+          {plan.planner_trace && typeof plan.planner_trace.source === "string" && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+              <span className="rounded-md border border-accent-line bg-surface px-2 py-0.5 text-accent-text">
+                {plannerSourceLabel(plan.planner_trace)}
+              </span>
+              <span className="text-muted">{plannerTraceDescription(plan.planner_trace)}</span>
+            </div>
+          )}
         </div>
         <button
           type="button"

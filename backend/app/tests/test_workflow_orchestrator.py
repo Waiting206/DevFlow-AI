@@ -20,7 +20,7 @@ from app.services.skills import get_skill_registry
 
 @pytest.mark.asyncio
 async def test_planner_builds_cross_domain_workflow_for_merge_readiness() -> None:
-    result = await PlannerAgent().run(
+    result = await PlannerAgent(use_llm=False).run(
         {"message": "这个 PR 能不能合并？请做多 agent 协作 review，检查 Issue、PR 和 CI 风险。"},
         {
             "repo_id": "repo-1",

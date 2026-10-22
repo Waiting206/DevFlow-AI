@@ -1,0 +1,22 @@
+{
+  "version": "planner-cases-v1",
+  "description": "Synthetic intent-selection cases. No repository content. Expected task sets and dependency edges were fixed before live evaluation.",
+  "context": {
+    "repo_id": "repo-1", "has_repo": true,
+    "has_issue": true, "issue_id": "issue-1", "issue_number": 12,
+    "has_pr": true, "pr_id": "pr-1", "pr_number": 34,
+    "has_ci_run": true, "workflow_run_id": "run-1", "workflow_run_number": 56
+  },
+  "cases": [
+    {"id": "broad_merge", "message": "这个 PR 能不能合并？请做多 agent 协作 review，检查 Issue、PR 和 CI 风险。", "tasks": ["repo_health", "issue_analysis", "pr_review", "ci_debug"]},
+    {"id": "ci_only_with_exclusions", "message": "只排查 CI，不分析 Issue，也不审查 PR 风险。", "tasks": ["repo_health", "ci_debug"]},
+    {"id": "pr_only_with_exclusions", "message": "只检查 PR 的 diff，暂不分析 Issue 和 CI。", "tasks": ["repo_health", "pr_review"]},
+    {"id": "issue_only_with_exclusions", "message": "只分析 Issue 的优先级和负责人，不检查 PR，也不诊断 CI。", "tasks": ["repo_health", "issue_analysis"]},
+    {"id": "ci_semantic_request", "message": "自动化作业在依赖安装阶段退出，定位日志中的首个异常并列出验证步骤。", "tasks": ["repo_health", "ci_debug"]},
+    {"id": "issue_semantic_request", "message": "有人提了一个缺陷工单，请先评估紧急程度并建议指派对象。", "tasks": ["repo_health", "issue_analysis"]},
+    {"id": "overview_without_analysis", "message": "仅统计仓库概况，不进入任何专项分析，也不用检索历史资料。", "tasks": ["repo_health"]},
+    {"id": "history_only_with_exclusions", "message": "只从知识库找相似案例，不做 PR、Issue 或 CI 专项分析。", "tasks": ["repo_health", "rag_search"]},
+    {"id": "ordered_ci_then_pr", "message": "先诊断 CI，再审查 PR 的 diff，不分析 Issue。", "tasks": ["repo_health", "ci_debug", "pr_review"], "edges": [["ci_debug", "pr_review"]]},
+    {"id": "explicit_targets_and_safety", "message": "分析 Issue #12、PR #34 和 CI run #56 后，生成外部评论草稿，等待我确认。", "context": {"issue_explicit": true, "pr_explicit": true, "workflow_run_explicit": true, "requires_safety": true}, "tasks": ["repo_health", "issue_analysis", "pr_review", "ci_debug", "safety_review"]}
+  ]
+}

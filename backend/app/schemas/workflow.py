@@ -43,6 +43,7 @@ class WorkflowSpec(BaseModel):
     max_parallel_tasks: int = Field(default=3, ge=1, le=8)
     requires_human_confirmation: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    planner_trace: dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkflowTaskResult(BaseModel):
