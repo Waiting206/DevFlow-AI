@@ -88,7 +88,7 @@ try {
     }
 
     $demoRepositories = Invoke-RestMethod -Uri "http://127.0.0.1:$BackendPort/api/repos" -TimeoutSec 5
-    $demoRepository = $demoRepositories | Where-Object { $_.full_name -eq "course-demo/devflow-sample-api" } | Select-Object -First 1
+    $demoRepository = $demoRepositories | Where-Object { $_.full_name -eq "repopilot-demo/sample-api" } | Select-Object -First 1
     if (-not $demoRepository) {
         throw "没有找到初始化后的演示仓库。"
     }

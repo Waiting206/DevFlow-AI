@@ -1,27 +1,53 @@
 from datetime import datetime, timezone
 
+from sqlalchemy.orm import Session
+
 from app.db.models import Issue, PRFile, PRReviewComment, PullRequest, Repository, WorkflowRun
 from app.db.session import Base, SessionLocal, engine
 from app.services.rag.indexing import index_repository_documents
+
+
+DEMO_OWNER = "repopilot-demo"
+DEMO_NAME = "sample-api"
+DEMO_FULL_NAME = f"{DEMO_OWNER}/{DEMO_NAME}"
+DEMO_DESCRIPTION = "Synthetic repository for local RepoPilot AI development and workflow validation."
+DEMO_GITHUB_ID = 10001
+# Compatibility key for previously seeded local data, never a current project label.
+LEGACY_DEMO_FULL_NAME = "course-demo/devflow-sample-api"
+
+
+def ensure_demo_repository(db: Session) -> Repository:
+    repo = db.query(Repository).filter(Repository.full_name == DEMO_FULL_NAME).one_or_none()
+    if repo is not None:
+        return repo
+    repo = db.query(Repository).filter(
+        Repository.full_name == LEGACY_DEMO_FULL_NAME,
+        Repository.github_id == DEMO_GITHUB_ID,
+    ).one_or_none()
+    if repo is None:
+        repo = Repository(owner=DEMO_OWNER, name=DEMO_NAME, full_name=DEMO_FULL_NAME,
+                          description=DEMO_DESCRIPTION, default_branch="main", github_id=DEMO_GITHUB_ID)
+        db.add(repo)
+    else:
+        # Rename the known synthetic fixture in place so foreign keys and chat history survive.
+        repo.owner, repo.name, repo.full_name = DEMO_OWNER, DEMO_NAME, DEMO_FULL_NAME
+        if not repo.description or repo.description == "Demo repository for RepoPilot AI course":
+            repo.description = DEMO_DESCRIPTION
+        old_prefix = f"https://github.com/{LEGACY_DEMO_FULL_NAME}/"
+        for run in db.query(WorkflowRun).filter(WorkflowRun.repo_id == repo.id).all():
+            if run.html_url and run.html_url.startswith(old_prefix):
+                run.html_url = f"https://github.com/{DEMO_FULL_NAME}/" + run.html_url[len(old_prefix):]
+    db.flush()
+    return repo
 
 
 def main() -> None:
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        repo = db.query(Repository).filter(Repository.full_name == "course-demo/devflow-sample-api").one_or_none()
-        if repo is None:
-            repo = Repository(
-                owner="course-demo",
-                name="devflow-sample-api",
-                full_name="course-demo/devflow-sample-api",
-                description="Demo repository for RepoPilot AI course",
-                default_branch="main",
-                github_id=10001,
-            )
-            db.add(repo)
-            db.commit()
-            db.refresh(repo)
+        repo = ensure_demo_repository(db)
+        db.commit()
+        db.refresh(repo)
 
         if db.query(Issue).filter(Issue.repo_id == repo.id).count() == 0:
             issues = [
@@ -54,7 +80,7 @@ def main() -> None:
                     name="backend-test",
                     status="completed",
                     conclusion="failure",
-                    html_url="https://github.com/course-demo/devflow-sample-api/actions/runs/301",
+                    html_url=f"https://github.com/{DEMO_FULL_NAME}/actions/runs/301",
                     jobs=[
                         {
                             "id": 9001,
@@ -67,7 +93,7 @@ def main() -> None:
                     logs_text="pytest backend/app/tests/test_github_sync.py::test_sync_issues FAILED AssertionError: expected 3 issues, got 2",
                     created_at=datetime.now(timezone.utc),
                 ),
-                WorkflowRun(repo_id=repo.id, github_run_id=302, name="frontend-lint", status="completed", conclusion="success", html_url="https://github.com/course-demo/devflow-sample-api/actions/runs/302", logs_text="", created_at=datetime.now(timezone.utc))
+                WorkflowRun(repo_id=repo.id, github_run_id=302, name="frontend-lint", status="completed", conclusion="success", html_url=f"https://github.com/{DEMO_FULL_NAME}/actions/runs/302", logs_text="", created_at=datetime.now(timezone.utc))
             ])
 
         db.flush()

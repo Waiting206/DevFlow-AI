@@ -1,0 +1,73 @@
+{
+  "description": "Development iterations only; final live-model baseline is stored separately.",
+  "batches": [
+    {
+      "source_artifact": "planner-live-v1-2026-10-21.json",
+      "source_sha256": "473ee962697d8d60bae76934523a40e9af530bb25679cf892d759e4dbc19dce5",
+      "created_at": "2026-10-21T09:21:18.835083+00:00",
+      "mode": "live_model",
+      "model": "deepseek-v4-pro",
+      "prompt_version": "planner-v1",
+      "prompt_sha256": "153851dd5313edb847d67ada9ab7c940d2b7ca878f607410f25bb2869900cb62",
+      "fixture_sha256": "5abbccec3f3c9bdbe5767d2bdf2cef5f6c8aa80e316f82ab4a31c4a4a8617f0d",
+      "summary": {
+        "baseline": {
+          "runs": 20,
+          "passed": 4,
+          "invariants_passed": 20,
+          "llm_accepted": 0,
+          "fallbacks": 0,
+          "latency_median_ms": 0.01,
+          "latency_max_ms": 0.49,
+          "provider_prompt_tokens": 0,
+          "provider_completion_tokens": 0
+        },
+        "candidate": {
+          "runs": 20,
+          "passed": 18,
+          "invariants_passed": 20,
+          "llm_accepted": 20,
+          "fallbacks": 0,
+          "latency_median_ms": 5316.67,
+          "latency_max_ms": 9644.0,
+          "provider_prompt_tokens": 34962,
+          "provider_completion_tokens": 12579
+        }
+      }
+    },
+    {
+      "source_artifact": "planner-network-fallback-2026-10-21.json",
+      "source_sha256": "6f1691f594c7313b2b60e64dd410a70abb3b29e6d8eeddcb58b1d1ecf29b0d43",
+      "created_at": "2026-10-21T09:23:49.320440+00:00",
+      "mode": "live_model",
+      "model": "deepseek-v4-pro",
+      "prompt_version": "planner-v1.1",
+      "prompt_sha256": "153851dd5313edb847d67ada9ab7c940d2b7ca878f607410f25bb2869900cb62",
+      "fixture_sha256": "5abbccec3f3c9bdbe5767d2bdf2cef5f6c8aa80e316f82ab4a31c4a4a8617f0d",
+      "summary": {
+        "baseline": {
+          "runs": 20,
+          "passed": 4,
+          "invariants_passed": 20,
+          "llm_accepted": 0,
+          "fallbacks": 0,
+          "latency_median_ms": 0.015,
+          "latency_max_ms": 0.27,
+          "provider_prompt_tokens": 0,
+          "provider_completion_tokens": 0
+        },
+        "candidate": {
+          "runs": 20,
+          "passed": 4,
+          "invariants_passed": 20,
+          "llm_accepted": 0,
+          "fallbacks": 20,
+          "latency_median_ms": 13.18,
+          "latency_max_ms": 81.95,
+          "provider_prompt_tokens": 0,
+          "provider_completion_tokens": 0
+        }
+      }
+    }
+  ]
+}

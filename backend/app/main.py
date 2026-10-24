@@ -84,7 +84,7 @@ def create_app() -> FastAPI:
 
     @app.on_event("startup")
     async def create_demo_tables() -> None:
-        # 课程项目默认自动建表；生产风格流程会在后续加入 Alembic 迁移。
+        # 本地开发启动时补齐表结构；正式部署需要版本化数据库迁移。
         Base.metadata.create_all(bind=engine)
         inspector = inspect(engine)
         if "users" in inspector.get_table_names():

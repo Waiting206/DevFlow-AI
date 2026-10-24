@@ -34,6 +34,11 @@ def main() -> None:
     from dotenv import load_dotenv
 
     load_dotenv(ROOT / ".env")
+    backend_port = int(os.environ.get("API_PORT", "8000"))
+    if not 1 <= backend_port <= 65535:
+        raise ValueError("API_PORT must be between 1 and 65535.")
+    backend_url = f"http://127.0.0.1:{backend_port}"
+    os.environ["NEXT_PUBLIC_API_BASE_URL"] = backend_url
     def stop(_signum: int, _frame: object) -> None:
         raise KeyboardInterrupt
 
@@ -45,7 +50,7 @@ def main() -> None:
     docker, node = shutil.which("docker"), shutil.which("node")
     if not docker or not node:
         raise RuntimeError("Docker and Node.js must be installed.")
-    for port in (8001, 3000):
+    for port in (backend_port, 3000):
         with socket.socket() as sock:
             if sock.connect_ex(("127.0.0.1", port)) == 0:
                 raise RuntimeError(f"Port {port} is already in use. Stop the previous RepoPilot AI run first.")
@@ -57,8 +62,8 @@ def main() -> None:
     logs = []
     try:
         for name, command, cwd, url in [
-            ("backend", [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8001"],
-             ROOT / "backend", "http://127.0.0.1:8001/health"),
+            ("backend", [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(backend_port)],
+             ROOT / "backend", f"{backend_url}/health"),
             ("frontend", [node, "node_modules/next/dist/bin/next", "dev", "--hostname", "127.0.0.1", "--port", "3000"],
              ROOT / "frontend", "http://127.0.0.1:3000"),
         ]:
@@ -69,7 +74,7 @@ def main() -> None:
             wait_for(url, child)
             print(f"{name} ready: {url}", flush=True)
         print("RepoPilot AI is running: http://127.0.0.1:3000", flush=True)
-        print("API documentation: http://127.0.0.1:8001/docs", flush=True)
+        print(f"API documentation: {backend_url}/docs", flush=True)
         print(f"Logs: {RUNTIME}\nStop this run to stop the frontend and backend.", flush=True)
         while all(child.poll() is None for child in children):
             time.sleep(1)

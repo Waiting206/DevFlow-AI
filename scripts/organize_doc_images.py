@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from datetime import date
 import hashlib
 import os
 import re
@@ -112,27 +113,22 @@ def find_references(article: Path) -> list[ImageReference]:
     return references
 
 
-def article_image_directory(course_root: Path, article: Path) -> Path:
-    relative = article.relative_to(course_root)
-    top_level = relative.parts[0]
-    if top_level.startswith("chapter_"):
-        return course_root / top_level / "images" / article.stem
-    if article.parent == course_root:
-        return course_root / "images" / article.stem
-    raise ValueError(f"Cannot determine image directory for {article}")
+def article_image_directory(docs_root: Path, article: Path) -> Path:
+    article.relative_to(docs_root)
+    return article.parent / "images" / article.stem
 
 
 def ensure_within(root: Path, path: Path) -> None:
     if os.path.commonpath((root.resolve(), path.resolve())) != str(root.resolve()):
-        raise ValueError(f"Path escapes course root: {path}")
+        raise ValueError(f"Path escapes documentation root: {path}")
 
 
-def build_plan(course_root: Path) -> Plan:
-    archive_root = course_root / "_orphaned_images"
+def build_plan(docs_root: Path) -> Plan:
+    archive_root = docs_root / "_orphaned_images"
     articles = sorted(
         path
-        for path in course_root.rglob("*.md")
-        if not is_excluded(path.relative_to(course_root))
+        for path in docs_root.rglob("*.md")
+        if not is_excluded(path.relative_to(docs_root))
     )
     references = [reference for article in articles for reference in find_references(article)]
 
@@ -153,8 +149,8 @@ def build_plan(course_root: Path) -> Plan:
     active_moves: list[Move] = []
     destination_sources: dict[str, Path] = {}
     for reference in references:
-        target = article_image_directory(course_root, reference.article) / reference.source.name
-        ensure_within(course_root, target)
+        target = article_image_directory(docs_root, reference.article) / reference.source.name
+        ensure_within(docs_root, target)
         key = os.path.normcase(str(target))
         existing_source = destination_sources.get(key)
         if existing_source is not None and existing_source != reference.source:
@@ -168,16 +164,16 @@ def build_plan(course_root: Path) -> Plan:
     active_sources = {os.path.normcase(str(reference.source)) for reference in references}
     images = sorted(
         path.resolve()
-        for path in course_root.rglob("*")
+        for path in docs_root.rglob("*")
         if path.is_file()
         and path.suffix.lower() in IMAGE_EXTENSIONS
-        and not is_excluded(path.relative_to(course_root))
+        and not is_excluded(path.relative_to(docs_root))
     )
     orphan_moves = []
     for image in images:
         if os.path.normcase(str(image)) in active_sources:
             continue
-        target = archive_root / image.relative_to(course_root)
+        target = archive_root / image.relative_to(docs_root)
         ensure_within(archive_root, target)
         orphan_moves.append(Move(image, target))
 
@@ -251,18 +247,18 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def write_archive_metadata(course_root: Path, orphan_moves: list[Move]) -> None:
-    archive_root = course_root / "_orphaned_images"
+def write_archive_metadata(docs_root: Path, orphan_moves: list[Move]) -> None:
+    archive_root = docs_root / "_orphaned_images"
     archive_root.mkdir(parents=True, exist_ok=True)
     readme = archive_root / "README.md"
     readme.write_text(
-        "# 课程孤立图片归档\n\n"
-        "此目录保存整理时未被任何课程 Markdown 引用的图片。文件保持原相对路径，"
-        "便于追溯旧章节和旧素材来源。\n\n"
-        "- 归档日期：2026-07-30\n"
+        "# 文档未引用图片归档\n\n"
+        "此目录保存整理时未被任何 Markdown 文档 引用的图片。文件保持原相对路径，"
+        "便于追溯旧文档和旧素材来源。\n\n"
+        f"- 归档日期：{date.today().isoformat()}\n"
         f"- 归档图片：{len(orphan_moves)} 张\n"
-        "- 使用规则：不要从课程正文直接引用这里的文件；确认仍有价值时，先移回对应"
-        "章节的 `images/<文章文件名>/`，再添加正文引用。\n"
+        "- 使用规则：不要从文档正文直接引用这里的文件；确认仍有价值时，先移回对应"
+        "文档目录的 `images/<文档文件名>/`，再添加正文引用。\n"
         "- 详细清单：`manifest.csv`\n",
         encoding="utf-8",
     )
@@ -277,23 +273,23 @@ def write_archive_metadata(course_root: Path, orphan_moves: list[Move]) -> None:
         for move in sorted(orphan_moves, key=lambda item: str(item.source)):
             writer.writerow(
                 [
-                    move.source.relative_to(course_root).as_posix(),
-                    move.target.relative_to(course_root).as_posix(),
+                    move.source.relative_to(docs_root).as_posix(),
+                    move.target.relative_to(docs_root).as_posix(),
                     move.target.stat().st_size,
                     sha256(move.target),
                 ]
             )
 
 
-def remove_empty_image_directories(course_root: Path) -> int:
+def remove_empty_image_directories(docs_root: Path) -> int:
     removed = 0
     directories = sorted(
-        (path for path in course_root.rglob("*") if path.is_dir()),
+        (path for path in docs_root.rglob("*") if path.is_dir()),
         key=lambda path: len(path.parts),
         reverse=True,
     )
     for directory in directories:
-        relative = directory.relative_to(course_root)
+        relative = directory.relative_to(docs_root)
         if "_orphaned_images" in relative.parts or "images" not in relative.parts:
             continue
         try:
@@ -304,7 +300,7 @@ def remove_empty_image_directories(course_root: Path) -> int:
     return removed
 
 
-def apply_plan(course_root: Path, plan: Plan) -> None:
+def apply_plan(docs_root: Path, plan: Plan) -> None:
     article_updates = updated_article_bytes(plan)
     original_articles = {path: path.read_bytes() for path in article_updates}
     completed_moves: list[Move] = []
@@ -315,8 +311,8 @@ def apply_plan(course_root: Path, plan: Plan) -> None:
             completed_moves.append(move)
         for article, data in article_updates.items():
             article.write_bytes(data)
-        write_archive_metadata(course_root, plan.orphan_moves)
-        removed = remove_empty_image_directories(course_root)
+        write_archive_metadata(docs_root, plan.orphan_moves)
+        removed = remove_empty_image_directories(docs_root)
         print(f"Removed empty image directories: {removed}")
     except Exception:
         for article, data in original_articles.items():
@@ -328,8 +324,8 @@ def apply_plan(course_root: Path, plan: Plan) -> None:
         raise
 
 
-def verify(course_root: Path, expected_archive_count: int | None = None) -> None:
-    plan = build_plan(course_root)
+def verify(docs_root: Path, expected_archive_count: int | None = None) -> None:
+    plan = build_plan(docs_root)
     missing = [reference for reference in plan.references if not reference.source.is_file()]
     if missing:
         raise ValueError(f"References missing after organization: {len(missing)}")
@@ -339,10 +335,10 @@ def verify(course_root: Path, expected_archive_count: int | None = None) -> None
         )
     if plan.orphan_moves:
         raise ValueError(
-            f"Unreferenced images remain in active course directories: {len(plan.orphan_moves)}"
+            f"Unreferenced images remain in active documentation directories: {len(plan.orphan_moves)}"
         )
 
-    archive_root = course_root / "_orphaned_images"
+    archive_root = docs_root / "_orphaned_images"
     archived_images = [
         path
         for path in archive_root.rglob("*")
@@ -358,16 +354,16 @@ def verify(course_root: Path, expected_archive_count: int | None = None) -> None
 
 
 def print_plan(plan: Plan) -> None:
-    print(f"Course articles: {len(plan.articles)}")
+    print(f"Markdown documents: {len(plan.articles)}")
     print(f"Image references: {len(plan.references)}")
     print(f"Referenced images to move: {len(plan.active_moves)}")
     print(f"Orphan images to archive: {len(plan.orphan_moves)}")
-    print("Target layout: chapter_xx/images/<article filename>/<image filename>")
+    print("Target layout: <document directory>/images/<document filename>/<image filename>")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Organize course images by article and archive unreferenced images."
+        description="Organize documentation images by article and archive unreferenced images."
     )
     parser.add_argument(
         "--apply",
@@ -377,25 +373,30 @@ def main() -> None:
     parser.add_argument(
         "--verify",
         action="store_true",
-        help="Verify an already organized course image tree.",
+        help="Verify an already organized documentation image tree.",
+    )
+    parser.add_argument(
+        "--root", type=Path, required=True,
+        help="Explicit documentation directory to inspect; default mode only prints a plan.",
     )
     args = parser.parse_args()
 
-    repo_root = Path(__file__).resolve().parents[1]
-    course_root = repo_root / "docs" / "course"
+    docs_root = args.root.expanduser().resolve()
+    if not docs_root.is_dir():
+        parser.error("--root must point to an existing documentation directory")
     if args.verify:
-        verify(course_root)
+        verify(docs_root)
         return
 
-    plan = build_plan(course_root)
+    plan = build_plan(docs_root)
     print_plan(plan)
     if not args.apply:
         print("Dry run only. Use --apply to perform the organization.")
         return
 
     archived_count = len(plan.orphan_moves)
-    apply_plan(course_root, plan)
-    verify(course_root, expected_archive_count=archived_count)
+    apply_plan(docs_root, plan)
+    verify(docs_root, expected_archive_count=archived_count)
 
 
 if __name__ == "__main__":

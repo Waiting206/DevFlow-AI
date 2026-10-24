@@ -942,6 +942,7 @@ export default function DashboardPage() {
   const [hiddenGraphNodeTypes, setHiddenGraphNodeTypes] = useState<Record<string, boolean>>({});
   const [hiddenGraphRelations, setHiddenGraphRelations] = useState<Record<string, boolean>>({});
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isOverviewCollapsed, setIsOverviewCollapsed] = useState(false);
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
   const [projectSource, setProjectSource] = useState<AddProjectSource>("remote");
   const [projectUrl, setProjectUrl] = useState("");
@@ -2638,18 +2639,35 @@ export default function DashboardPage() {
             <div className="overview-context min-w-0 flex-1">
               <div className="overview-context-line flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
                 <h2 className="inline-flex items-center gap-1.5 font-semibold text-ink"><Orbit className="h-3.5 w-3.5 self-center text-accent-text" aria-hidden="true" />总览</h2>
+                {!isOverviewCollapsed && (<>
                 <span className="text-xs text-muted">当前代码仓</span>
                 <span className="truncate text-sm font-semibold text-ink">{selectedRepo?.full_name || "未选择仓库"}</span>
                 {selectedConversation && <span className="overview-conversation max-w-full truncate rounded bg-panel px-2 py-0.5 text-xs text-muted" title={selectedConversation.title}>会话：{selectedConversation.title}</span>}
+                </>)}
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2">
+              {!isOverviewCollapsed && (<>
               <div className="workspace-environment inline-flex items-center gap-1.5 rounded border border-accent-line bg-accent-soft px-2 py-1 text-[10px] font-medium text-accent-text"><Cpu className="h-3 w-3" aria-hidden="true" />Production Workspace</div>
               <button onClick={openAddProject} className="text-xs text-accent hover:underline">
                 管理项目
               </button>
+              </>)}
+              <button
+                type="button"
+                onClick={() => setIsOverviewCollapsed((collapsed) => !collapsed)}
+                aria-expanded={!isOverviewCollapsed}
+                aria-controls="workspace-overview-content"
+                aria-label={isOverviewCollapsed ? "展开总览" : "折叠总览"}
+                title={isOverviewCollapsed ? "展开总览" : "折叠总览，释放聊天空间"}
+                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-line bg-surface px-2 text-xs font-medium text-muted transition hover:border-accent-line hover:bg-accent-soft hover:text-accent-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isOverviewCollapsed ? "" : "rotate-180"}`} aria-hidden="true" />
+                <span>{isOverviewCollapsed ? "展开" : "收起"}</span>
+              </button>
             </div>
           </div>
+          <div id="workspace-overview-content" hidden={isOverviewCollapsed}>
           {selectedRepo && <RepositoryIndexControls key={selectedRepo.id} repoId={selectedRepo.id}
             onUpdated={() => Promise.all([loadProjectIndexState(selectedRepo.id), loadProjectKnowledge(selectedRepo.id), loadKnowledgeGraph(selectedRepo.id)])} />}
           <div className="overview-metrics mt-2 grid grid-cols-2 gap-1.5 md:grid-cols-3 xl:grid-cols-6">
@@ -2659,6 +2677,7 @@ export default function DashboardPage() {
             <MetricCard icon={XCircle} label="已拒绝 Issue" value={rejectedIssues.length} />
             <MetricCard icon={AlertTriangle} label="失败 CI" value={failedRuns.length} />
             <MetricCard icon={CheckCircle2} label="已合并 PR" value={mergedPrs.length} />
+          </div>
           </div>
         </section>
 

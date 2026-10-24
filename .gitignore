@@ -47,3 +47,20 @@ devflow_demo.db
 Thumbs.db
 .idea/
 .vscode/
+
+# Personal material and local cleanup archives
+/.local-only/
+/docs/resume-templates/
+/scripts/build_resume_templates.py
+/docs/branding-update.md
+
+# Generated Next.js declarations (recreated by next dev/build)
+/frontend/next-env.d.ts
+
+# Keep reviewed Planner fixtures/results; ignore ad hoc run output and debug captures
+/docs/evaluations/planner-*.json
+!/docs/evaluations/planner-cases-*.json
+!/docs/evaluations/planner-live-2026-10-22.json
+!/docs/evaluations/planner-development-summary.json
+/docs/evaluations/planner-*.png
+/docs/ui-mission-control/workspace-desktop.jpg
