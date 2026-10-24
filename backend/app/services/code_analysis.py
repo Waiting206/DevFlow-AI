@@ -187,6 +187,7 @@ def repository_checkout_state(repo: Repository) -> dict:
         "error_message": redact_git_secrets(error) if error else None,
         "local_path": str(path) if path.is_dir() else None,
         "updated_at": updated,
+        "commit_sha": _git_text(["rev-parse", "HEAD"], path) if path.is_dir() else None,
     }
 
 
@@ -210,17 +211,18 @@ def queue_repository_checkout(db: Session, repo: Repository) -> bool:
     return True
 
 
-def _run_git(args: list[str], cwd: Path | None = None) -> None:
+def _run_git(args: list[str], cwd: Path | None = None) -> str:
     try:
-        subprocess.run(
+        result = subprocess.run(
             ["git", *args],
             cwd=str(cwd) if cwd else None,
             check=True,
-            stdout=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             timeout=180,
         )
+        return result.stdout.strip()
     except subprocess.CalledProcessError as exc:
         raise subprocess.CalledProcessError(
             exc.returncode,
@@ -235,14 +237,14 @@ def _is_git_work_tree(path: Path) -> bool:
     if not path.exists() or not path.is_dir() or not shutil.which("git"):
         return False
     result = subprocess.run(
-        ["git", "rev-parse", "--is-inside-work-tree"],
+        ["git", "rev-parse", "--show-toplevel"],
         cwd=str(path),
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,
         timeout=30,
     )
-    return result.returncode == 0 and result.stdout.strip().lower() == "true"
+    return result.returncode == 0 and Path(result.stdout.strip()).resolve() == path.resolve()
 
 
 def _sync_checkout(repo: Repository, token: str | None) -> Path:
@@ -263,12 +265,19 @@ def _sync_checkout(repo: Repository, token: str | None) -> Path:
         raise RuntimeError("未找到 git 可执行文件，无法克隆仓库代码")
 
     if (target / ".git").exists() or _is_git_work_tree(target):
-        try:
-            _run_git(["fetch", "--depth", "1", "origin", branch], cwd=target)
-            _run_git(["checkout", branch], cwd=target)
-            _run_git(["pull", "--ff-only", "origin", branch], cwd=target)
-        except subprocess.CalledProcessError as exc:
-            logger.warning("更新现有 checkout %s 失败，将使用缓存文件：%s", target, git_error_message(exc))
+        if not _is_git_work_tree(target):
+            raise RuntimeError("后台源码目录不是独立 Git 工作树，请检查仓库路径后重试。")
+        # A managed checkout is a read-only remote snapshot, not a developer
+        # branch to merge. Keep local branches/commits recoverable and refuse
+        # to overwrite modified or untracked files in a user-selected target.
+        if _run_git(["status", "--porcelain", "--untracked-files=all"], cwd=target):
+            raise RuntimeError("后台源码副本存在本地修改或未跟踪文件，已停止更新；请先备份或使用本地仓库模式。")
+        remote_ref = f"refs/remotes/origin/{branch}"
+        _run_git(["fetch", "--depth", "1", "origin", f"+refs/heads/{branch}:{remote_ref}"], cwd=target)
+        commit_sha = _run_git(["rev-parse", "--verify", f"{remote_ref}^{{commit}}"], cwd=target)
+        _run_git(["checkout", "--detach", "--no-overwrite-ignore", commit_sha], cwd=target)
+        if _git_text(["rev-parse", "HEAD"], target) != commit_sha:
+            raise RuntimeError("源码版本与本次远端提交不一致，请重试同步。")
         return target
 
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -490,6 +499,13 @@ async def sync_repository_code_analysis(db: Session, repo: Repository) -> int:
     purge_legacy_code_documents(db, repo.id)
     repo.clone_url = repo.clone_url or _clone_url(repo)
     db.commit()
+    from app.services.project_indexing import get_project_index_state, scan_project_index
+
+    index_state = get_project_index_state(db, repo)
+    if index_state["status"] in {"stale", "failed"}:
+        scan_result = scan_project_index(db, repo)
+        if scan_result["status"] == "failed":
+            logger.warning("Project document refresh failed for %s: %s", repo.id, scan_result["error_message"])
     return symbol_count
 
 

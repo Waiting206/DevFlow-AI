@@ -321,10 +321,11 @@ export default function ReposPage() {
                   </button>
                   <button
                     onClick={() => refreshRepo(item.id)}
+                    title="同步 Issue、PR、CI，后台更新源码及已有项目资料；语义检索需在 RAG 工作室重建向量索引"
                     disabled={loading}
                     className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-on-accent transition hover:bg-accent disabled:opacity-60"
                   >
-                    立即刷新
+                    同步仓库
                   </button>
                   <button
                     onClick={() => deleteRepo(item)}
@@ -354,7 +355,7 @@ export default function ReposPage() {
           </div>
           <div className="rounded-md bg-panel p-3">
             <div className="font-medium text-ink">定时同步兜底</div>
-            <p className="mt-1">后端启动后会定时刷新已连接仓库，默认 5 分钟一次。</p>
+            <p className="mt-1">后端默认每轮间隔 5 分钟同步已连接仓库的数据与源码；已有项目资料发生变化时自动更新。</p>
           </div>
         </div>
       </Card>

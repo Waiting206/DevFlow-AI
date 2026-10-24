@@ -46,6 +46,7 @@ class RepoCheckoutResponse(BaseModel):
     error_message: str | None = None
     local_path: str | None = None
     updated_at: datetime | None = None
+    commit_sha: str | None = None
 
 
 class RepoConnectResponse(BaseModel):

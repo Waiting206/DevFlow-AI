@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-24",
+  "purpose": "Fix managed shallow-checkout refresh and propagation to existing project documents.",
+  "automated_validation": {
+    "backend_tests_passed": 288,
+    "frontend_production_build": "passed",
+    "frontend_runtime_tests_passed": 7,
+    "live_llm_calls_in_tests": false
+  },
+  "git_regression_coverage": [
+    "legacy shallow checkout with invisible ancestry",
+    "three consecutive remote updates",
+    "force-pushed remote history",
+    "remote file deletion",
+    "tracked and untracked local-file protection",
+    "local-mode branch and draft preservation",
+    "independent source refresh after GitHub API failure",
+    "opted-in document refresh and unchanged-scan avoidance",
+    "persistent source failure without replacing existing documents",
+    "nested directory does not count as repository root"
+  ],
+  "live_validation": {
+    "repository": "Waiting206/RepoPilot",
+    "checkout_before": "ed3ff70842c16161ebbea7627f375a4eb30cc1e4",
+    "checkout_after": "a77f23744c96526f58862c8a47368c411afb3997",
+    "project_documents_before": 23,
+    "project_documents_after": 66,
+    "index_status": "ready",
+    "vector_index": {
+      "eligible_documents": 63,
+      "documents_with_embeddings": 63,
+      "milvus_documents": 63,
+      "missing_vectors": 0,
+      "obsolete_vectors": 0
+    },
+    "reindex_request": {
+      "client_timeout_seconds": 240,
+      "client_result": "timed_out_while_background_task_continued",
+      "completion_verified": true,
+      "verification": "PostgreSQL embedding metadata and exact Milvus document-ID reconciliation"
+    },
+    "vector_search": {
+      "query": "Planner 模型超时或输出无效时如何回退规则计划？",
+      "mode": "vector",
+      "top_k": 3,
+      "result_count": 3,
+      "seconds": 0.38,
+      "sources": [
+        {
+          "title": "Planner 同模型接入与规则兜底整改 · 调用预算和失败处理",
+          "source_type": "project_doc",
+          "score": 0.8973
+        },
+        {
+          "title": "Planner 同模型接入与规则兜底整改 · 工程回归",
+          "source_type": "project_doc",
+          "score": 0.8465
+        },
+        {
+          "title": "RepoPilot AI · 工程工作流与验证",
+          "source_type": "project_doc",
+          "score": 0.8455
+        }
+      ]
+    }
+  },
+  "boundaries": [
+    "First project-document scan remains an explicit user action.",
+    "Synchronization refreshes opted-in project documents but does not call Embedding automatically.",
+    "Vector index rebuild remains a separate RAG operation.",
+    "Webhook requires a configured, reachable receiver; periodic synchronization is the fallback.",
+    "Network, authentication and local-change failures are visible and retryable, not reported as fresh source."
+  ]
+}

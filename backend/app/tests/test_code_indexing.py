@@ -1,12 +1,14 @@
 import subprocess
 import uuid
+
+import pytest
 from types import SimpleNamespace
 
 from app.core.config import settings
 from app.services import code_analysis
 
 
-def test_sync_checkout_uses_cached_checkout_when_update_fails(tmp_path, monkeypatch) -> None:
+def test_sync_checkout_propagates_update_failure(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(settings, "repo_checkout_dir", str(tmp_path))
     repo = SimpleNamespace(
         id=uuid.uuid4(),
@@ -20,9 +22,12 @@ def test_sync_checkout_uses_cached_checkout_when_update_fails(tmp_path, monkeypa
     def fail_run(args, cwd=None):
         raise subprocess.CalledProcessError(128, ["git", *args], stderr="network failed")
 
+    monkeypatch.setattr(code_analysis, "_is_git_work_tree", lambda _path: True)
     monkeypatch.setattr(code_analysis, "_run_git", fail_run)
 
-    assert code_analysis._sync_checkout(repo, None) == checkout
+    with pytest.raises(subprocess.CalledProcessError) as error:
+        code_analysis._sync_checkout(repo, None)
+    assert error.value.stderr == "network failed"
 
 
 def test_sync_checkout_uses_configured_local_repo_without_updating(tmp_path, monkeypatch) -> None:

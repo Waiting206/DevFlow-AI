@@ -180,6 +180,16 @@ async def sync_repository_by_id(repo_id: UUID, payload: RepoSyncRequest) -> Repo
         repo = db.get(Repository, repo_id)
         if repo is None:
             return None
-        return await sync_repository(db, repo, payload)
+        try:
+            return await sync_repository(db, repo, payload)
+        finally:
+            # GitHub API failures must not stop an independent Git checkout
+            # from catching up. Roll back any incomplete facts transaction.
+            db.rollback()
+            from app.services.code_analysis import queue_repository_checkout, sync_repository_code_analysis_by_id
+
+            db.refresh(repo)
+            if queue_repository_checkout(db, repo):
+                await sync_repository_code_analysis_by_id(repo.id)
     finally:
         db.close()
