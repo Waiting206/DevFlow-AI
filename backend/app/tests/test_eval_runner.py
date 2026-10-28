@@ -451,7 +451,7 @@ async def test_ragas_api_persists_summary_metrics(monkeypatch) -> None:
     db.commit()
 
     async def fake_run(db_arg, repo_id, **kwargs):
-        assert db_arg is db
+        assert db_arg.get_bind() is engine
         assert repo_id == str(repo.id)
         assert kwargs["run_judge"] is True
         await kwargs["progress_callback"](
@@ -472,7 +472,9 @@ async def test_ragas_api_persists_summary_metrics(monkeypatch) -> None:
         }
 
     monkeypatch.setattr(evaluation_routes, "run_rag_quality_eval", fake_run)
-    monkeypatch.setattr(evaluation_routes, "SessionLocal", lambda: db)
+    from app.services.evals import jobs
+
+    monkeypatch.setattr(jobs, "SessionLocal", sessionmaker(bind=engine))
     background_tasks = BackgroundTasks()
     response = await evaluation_routes.run_rag_eval(
         EvalRunRequest(name="api-ragas", repo_id=repo.id, run_judge=True),
@@ -486,6 +488,7 @@ async def test_ragas_api_persists_summary_metrics(monkeypatch) -> None:
     assert queued_history[0]["status"] == "queued"
 
     await background_tasks()
+    db.expire_all()
     history = await evaluation_routes.list_evals(db=db, _user=object())
     detail = await evaluation_routes.get_eval(response.eval_id, db=db, _user=object())
 

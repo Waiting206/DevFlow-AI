@@ -20,6 +20,7 @@ from app.services.context_compression import (
     prompt_cache_model_kwargs,
 )
 from app.services.skills import SkillRegistry, SkillRegistryError
+from app.services.github.draft_builder import GitHubDraftToolArgs
 
 
 ConversationTool = Callable[[dict[str, Any], dict[str, Any]], Awaitable[dict[str, Any]]]
@@ -1032,6 +1033,8 @@ class ChatAgent(BaseAgent):
         normalized = dict(action_input)
         message = str(state.get("message") or "")
         context = state.get("context") or {}
+        if action == "safety_agent.classify_action_risk":
+            normalized["message"] = message
 
         if action in {
             "repo_health.generate_summary",
@@ -1297,7 +1300,7 @@ class ChatAgent(BaseAgent):
                 coroutine=call_tool,
                 name=safe_name,
                 description=self._tool_description(name, context),
-                args_schema=GenericToolArgs,
+                args_schema=GitHubDraftToolArgs if name == "safety_agent.classify_action_risk" else GenericToolArgs,
                 infer_schema=False,
             )
         return wrapped
@@ -1325,7 +1328,7 @@ class ChatAgent(BaseAgent):
             "pr_review_agent.analyze_pr": "分析最新同步的 PR。",
             "ci_debug_agent.analyze_workflow_run": "分析最新失败的 CI 运行。",
             "report_agent.generate_weekly_report": "生成仓库报告。",
-            "safety_agent.classify_action_risk": "安全起草有风险的写操作或外部发送动作。",
+            "safety_agent.classify_action_risk": "生成待人工确认的 GitHub 操作草稿。传入 action、实际 title/content；已有 Issue/PR 操作须传 target_type 和 target_number，不得默认选最新一条。创建新 Issue 用 create_issue，不需要已有编号。支持 labels 和用户明确指定的 GitHub assignees；信息不全先澄清。这里只保存草稿，不执行写入。",
             "workflow.run_engineering_review": "运行 Planner -> 专用 Agent -> Observer -> Synthesis 工作流，用于 PR 就绪度、阻塞项、优先级和多 Agent 仓库审查等跨领域工程决策。",
         }
         suffixes = {}

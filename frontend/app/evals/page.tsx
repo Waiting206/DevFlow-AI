@@ -14,6 +14,7 @@ import {
   Play,
   RefreshCcw,
   SearchCheck,
+  Square,
   Wrench
 } from "lucide-react";
 
@@ -222,6 +223,7 @@ export default function EvalsPage() {
   const [baselineId, setBaselineId] = useState("");
   const [comparison, setComparison] = useState<EvalComparison | null>(null);
   const [comparing, setComparing] = useState(false);
+  const [controlling, setControlling] = useState(false);
 
   const loadHistory = useCallback(async (targetRepoId?: string) => {
     const suffix = targetRepoId ? `?repo_id=${encodeURIComponent(targetRepoId)}&limit=50` : "?limit=50";
@@ -241,6 +243,10 @@ export default function EvalsPage() {
 
   useEffect(() => {
     if (!repoId) return;
+    let cancelled = false;
+    setActiveEvalId("");
+    setLoading(false);
+    setResult(null);
     setError("");
     setNotice("");
     setDraftId("");
@@ -249,6 +255,7 @@ export default function EvalsPage() {
       apiGet<EvalSuite[]>(`/api/evals/suites?repo_id=${encodeURIComponent(repoId)}`).catch(() => []),
       loadHistory(repoId)
     ]).then(([suiteItems, historyItems]) => {
+      if (cancelled) return;
       setSuites(suiteItems);
       const recommended = suiteItems.find((item) => item.recommended && item.ready) || suiteItems.find((item) => item.ready);
       setSuiteId(recommended?.id || "");
@@ -262,6 +269,7 @@ export default function EvalsPage() {
         setLoading(true);
       }
     });
+    return () => { cancelled = true; };
   }, [repoId, loadHistory]);
 
   useEffect(() => {
@@ -376,6 +384,40 @@ export default function EvalsPage() {
     }
   }
 
+  async function cancelEval() {
+    if (!activeEvalId) return;
+    setControlling(true);
+    setError("");
+    try {
+      const data = await apiPost<EvalResponse>(`/api/evals/${activeEvalId}/cancel`, {});
+      setActiveEvalId("");
+      setLoading(false);
+      setResult(data);
+      setNotice("");
+      await loadHistory(repoId);
+    } catch {
+      setError("取消失败，请重试。");
+    } finally {
+      setControlling(false);
+    }
+  }
+
+  async function rerunEval() {
+    if (!result || active || loading) return;
+    setControlling(true);
+    setError("");
+    setDraftId("");
+    try {
+      const data = await apiPost<EvalResponse>(`/api/evals/${result.eval_id}/rerun`, {});
+      beginJob(data, "已创建新的评测任务，原记录已保留。");
+      await loadHistory(repoId);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "重新运行失败，请重试。");
+    } finally {
+      setControlling(false);
+    }
+  }
+
   async function createIssueDraft() {
     if (!result) return;
     setError("");
@@ -462,10 +504,15 @@ export default function EvalsPage() {
             ))}
           </div>
 
-          <PrimaryButton onClick={runEval} disabled={loading || !repoId || !suiteId || selectedSuite?.ready === false} className="mt-6 w-full gap-2">
+          <PrimaryButton onClick={runEval} disabled={loading || controlling || !repoId || !suiteId || selectedSuite?.ready === false} className="mt-6 w-full gap-2">
             {loading ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
             {loading ? "后台任务运行中…" : "运行固定 RAGAS 评测"}
           </PrimaryButton>
+          {activeEvalId && (
+            <button onClick={cancelEval} disabled={controlling} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md border border-danger-line px-3 py-2 text-sm font-medium text-danger disabled:opacity-40">
+              <Square className="h-4 w-4" />{controlling ? "正在取消…" : "取消评测"}
+            </button>
+          )}
         </div>
 
         <div className="min-w-0 rounded-md border border-line bg-surface p-5">
@@ -492,7 +539,9 @@ export default function EvalsPage() {
             <ProgressPanel progress={result.result.progress} runMode={result.result.run_mode} />
           ) : result ? (
             <>
-              {result.result.ragas?.error && (
+              {status === "error" ? (
+                <div className="mt-4 rounded-md border border-danger-line bg-danger-soft p-3 text-sm text-danger">评测出错，请重新运行。</div>
+              ) : status !== "cancelled" && result.result.ragas?.error && (
                 <div className="mt-4 flex gap-2 rounded-md border border-danger-line bg-danger-soft p-3 text-sm text-danger">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <div><div className="font-semibold">评测不完整：{result.result.ragas.case_errors || 0} 条用例包含 Judge 错误</div><div className="mt-1 text-xs">{result.result.ragas.error}</div></div>
@@ -500,10 +549,13 @@ export default function EvalsPage() {
               )}
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <button onClick={rescoreEval} disabled={!rescoreAvailable || loading} className="inline-flex items-center gap-2 rounded-md border border-accent-line bg-accent-soft px-3 py-2 text-sm font-medium text-accent-text transition hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-40">
+                <button onClick={rerunEval} disabled={loading || controlling} className="inline-flex items-center gap-2 rounded-md border border-accent-line bg-accent-soft px-3 py-2 text-sm font-medium text-accent-text disabled:opacity-40">
+                  <Play className="h-4 w-4" />重新运行
+                </button>
+                <button onClick={rescoreEval} disabled={!rescoreAvailable || loading || controlling} className="inline-flex items-center gap-2 rounded-md border border-accent-line bg-accent-soft px-3 py-2 text-sm font-medium text-accent-text transition hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-40">
                   <RefreshCcw className="h-4 w-4" />仅重试异常评分
                 </button>
-                <button onClick={createIssueDraft} disabled={loading} className="inline-flex items-center gap-2 rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm font-medium text-warning transition hover:bg-warning-soft disabled:opacity-40">
+                <button onClick={createIssueDraft} disabled={loading || controlling || !cases.length} className="inline-flex items-center gap-2 rounded-md border border-warning-line bg-warning-soft px-3 py-2 text-sm font-medium text-warning transition hover:bg-warning-soft disabled:opacity-40">
                   <FileWarning className="h-4 w-4" />生成修复 Issue 草稿
                 </button>
               </div>
@@ -584,7 +636,7 @@ export default function EvalsPage() {
                     <Score value={metrics.context_precision} />
                     <Score value={metrics.context_recall} />
                     <Score value={metrics.faithfulness} />
-                    <td className="py-3">{ACTIVE_STATUSES.has(itemStatus) ? <RunningLabel /> : item.result.evaluation_complete ? <PassLabel text="完整" /> : <FailLabel text="不完整" />}</td>
+                    <td className="py-3">{ACTIVE_STATUSES.has(itemStatus) ? <RunningLabel /> : itemStatus === "error" ? <FailLabel text="评测出错" /> : itemStatus === "cancelled" ? <span className="text-muted">已取消</span> : item.result.evaluation_complete ? <PassLabel text="完整" /> : <FailLabel text="不完整" />}</td>
                     <td className="py-3"><QualityLabel status={item.result.quality_status || (item.result.passed ? "passed" : "failed")} /></td>
                   </tr>
                 );
@@ -600,6 +652,8 @@ export default function EvalsPage() {
 
 function StatusGroup({ result, active }: { result: EvalResult; active: boolean }) {
   if (active) return <RunningLabel />;
+  if (result.status === "error") return <FailLabel text="评测出错" />;
+  if (result.status === "cancelled") return <span className="rounded-full bg-elevated px-3 py-1 text-xs font-semibold text-muted">已取消</span>;
   return (
     <div className="flex flex-wrap justify-end gap-2">
       <span className="rounded-full bg-elevated px-3 py-1 text-xs font-semibold text-content">运行完成</span>
@@ -618,6 +672,9 @@ function QualityLabel({ status }: { status: string }) {
 }
 
 function DiagnosticOverview({ result }: { result: EvalResult }) {
+  if (result.status === "error" || result.status === "cancelled") {
+    return <p className="mt-4 text-sm text-muted">本次未形成完整评测结论，可以重新运行。</p>;
+  }
   const counts = result.diagnostics?.category_counts || {};
   const entries = Object.entries(counts);
   return (

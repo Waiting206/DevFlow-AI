@@ -146,11 +146,15 @@ def create_app() -> FastAPI:
                     connection.execute(text("ALTER TABLE documents DROP COLUMN embedding"))
         from app.db.session import SessionLocal
         from app.services.conversations import backfill_all_default_conversations
+        from app.services.evals.jobs import recover_interrupted_evals
+        from app.services.github.action_execution import recover_interrupted_actions
         from app.services.code_analysis import purge_legacy_code_documents
         from app.services.rag.vector_store import delete_milvus_documents, milvus_runtime_status
 
         db = SessionLocal()
         try:
+            recover_interrupted_evals(db)
+            recover_interrupted_actions(db)
             backfill_all_default_conversations(db)
             if purge_legacy_code_documents(db):
                 db.commit()

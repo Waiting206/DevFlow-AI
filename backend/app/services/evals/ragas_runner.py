@@ -38,6 +38,7 @@ AGENT_RAGAS_METRICS = (
 )
 
 _FAITHFULNESS_CHUNK_CHARS = 700
+_FAITHFULNESS_CONCURRENCY = 2
 
 
 def _split_faithfulness_response(text: str, max_chars: int = _FAITHFULNESS_CHUNK_CHARS) -> list[str]:
@@ -253,7 +254,7 @@ class RagasCollectionsScorer:
         retrieved_contexts: list[str],
     ) -> float:
         chunks = _split_faithfulness_response(response)
-        semaphore = asyncio.Semaphore(2)
+        semaphore = asyncio.Semaphore(_FAITHFULNESS_CONCURRENCY)
 
         async def score_chunk(chunk: str) -> Any:
             async with semaphore:
@@ -270,9 +271,14 @@ class RagasCollectionsScorer:
         failures = [result for result in results if isinstance(result, BaseException)]
         if failures:
             first = failures[0]
+            detail = (
+                f"chunk scoring exceeded {settings.ragas_timeout_seconds:g}s"
+                if isinstance(first, TimeoutError)
+                else str(first)
+            )
             raise RagasUnavailableError(
                 f"Faithfulness chunk scoring failed ({len(failures)}/{len(chunks)}): "
-                f"{type(first).__name__}: {first}"
+                f"{type(first).__name__}: {detail}"
             ) from first
 
         weights = [max(1, len(chunk)) for chunk in chunks]
@@ -342,9 +348,15 @@ class RagasCollectionsScorer:
                 )
 
         names = list(calls)
+        timeouts = {name: settings.ragas_timeout_seconds for name in names}
+        if "faithfulness" in calls:
+            batches = math.ceil(len(_split_faithfulness_response(response)) / _FAITHFULNESS_CONCURRENCY)
+            # Queued chunks need their own scoring window. A small grace period
+            # lets inner timeouts report the actual failure before this guard fires.
+            timeouts["faithfulness"] = batches * settings.ragas_timeout_seconds + 1.0
         results = await asyncio.gather(
             *(
-                asyncio.wait_for(calls[name], timeout=settings.ragas_timeout_seconds)
+                asyncio.wait_for(calls[name], timeout=timeouts[name])
                 for name in names
             ),
             return_exceptions=True,
@@ -353,7 +365,10 @@ class RagasCollectionsScorer:
         errors: dict[str, str] = {}
         for name, result in zip(names, results, strict=True):
             if isinstance(result, BaseException):
-                errors[name] = f"{type(result).__name__}: {result}"
+                if isinstance(result, TimeoutError):
+                    errors[name] = f"TimeoutError: {name} scoring exceeded {timeouts[name]:g}s"
+                else:
+                    errors[name] = f"{type(result).__name__}: {result}"
                 continue
             value = result if isinstance(result, (int, float)) else result.value
             scores[name] = round(float(value), 4)

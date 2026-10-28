@@ -529,6 +529,29 @@ class ActionDraft(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
+    execution: Mapped["ActionExecution | None"] = relationship(back_populates="draft", uselist=False, lazy="selectin")
+
+
+class ActionExecution(Base):
+    __tablename__ = "action_executions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    draft_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("action_drafts.id"), unique=True, index=True)
+    repo_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("repositories.id"), index=True)
+    operator_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    request_json: Mapped[dict[str, Any]] = mapped_column(JSON)
+    expected_state: Mapped[dict[str, Any]] = mapped_column(JSON)
+    write_status: Mapped[str] = mapped_column(String(40), default="running", index=True)
+    write_result: Mapped[dict[str, Any] | list | None] = mapped_column(JSON, nullable=True)
+    write_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    verification_status: Mapped[str] = mapped_column(String(40), default="pending", index=True)
+    verification_checks: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    write_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    draft: Mapped["ActionDraft"] = relationship(back_populates="execution")
+
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"

@@ -35,6 +35,6 @@ class SafetyAgent(BaseAgent):
         return SafetyOutput(
             requires_confirmation=risky,
             risk_level="medium" if risky else "low",
-            reason="MVP 阶段所有外部写操作只生成草稿。" if risky else "只读分析操作不需要人工确认。",
+            reason="外部写操作须先生成草稿，由用户审查确认后执行。" if risky else "只读分析操作不需要人工确认。",
             draft=input_data.get("draft"),
         ).model_dump()

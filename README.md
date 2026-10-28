@@ -14,7 +14,7 @@ RepoPilot AI 是一个持续迭代的个人项目，面向 GitHub PR / Issue 研
 - 工作区代码工具：安全地列出文件、读取文件和搜索本地代码。
 - RAG 聚焦 Issue 描述、PR 说明与 Review 评论、失败 CI 日志、项目文档、上传知识和已批准的长期记忆；当前代码走工作区/词法检索，团队与实时状态走结构化查询。
 - 项目资料接入：后台准备源码、就绪检查、文档扫描与可配置索引范围；失败可重试。
-- 安全操作：GitHub 写入先生成草稿，人工确认并通过权限检查后才执行，保留执行结果与审计记录。
+- 安全操作与独立验证：GitHub 写入先生成草稿，人工确认并通过权限检查后执行；服务端独立回读并比对预期，分别保存执行状态、验证结果和审计记录。
 - 生成工程周报。
 - 基础 Eval 覆盖 Issue 分类、PR 覆盖度、RAG 命中率、工具 schema 就绪度和结构化输出校验。
 
@@ -68,6 +68,28 @@ flowchart TD
 | 规划耗时中位数 | 0.01 ms | 4247.25 ms |
 
 这组开发用例验证了排除要求和同义表达下的任务选择；仍有一次遗漏了 CI → PR 依赖。测试只运行规划，不衡量最终诊断准确率或完整工作流成本，样本结果也不代表线上整体表现。可查看 [固定用例](docs/evaluations/planner-cases-v1.json)、[原始结果](docs/evaluations/planner-live-2026-10-22.json) 和 [实现及验证说明](docs/architecture/planner-llm-upgrade.md)。
+
+## GitHub 写操作与独立验证
+
+支持创建 Issue、发布 Issue/PR 评论、关闭 Issue 和添加标签。确认后的请求和预期结果会先保存，再执行 GitHub 写入；随后由服务端发起独立 GET 请求，使用确定性规则检查实际状态。
+
+```text
+生成草稿 → 人工确认与权限检查 → 保存请求和预期结果
+→ 执行 GitHub 写入 → 独立回读实际数据 → 比对并保存验证记录
+```
+
+| 操作 | 回读检查内容 |
+| --- | --- |
+| 创建 Issue | 编号、资源类型、标题和正文，以及草稿中指定的负责人、标签是否存在 |
+| 发布 Issue/PR 评论 | 评论 ID、所属 Issue/PR 和正文是否匹配 |
+| 关闭 Issue | 目标编号是否匹配，状态是否为 closed |
+| 添加标签 | 目标编号是否匹配，指定标签是否存在 |
+
+写入状态与验证状态分别展示。例如，Issue 创建成功，但指定负责人未生效时，会保留成功的写入响应，并将验证标记为未通过。无法回读或缺少新资源编号时，结果标记为未知，不会自动重发写操作。草稿页提供“仅重新验证”，通过 `POST /api/action-drafts/{draft_id}/verify` 重新读取实际状态，不重复创建 Issue 或发表评论。
+
+执行记录保存在 `action_executions`，包含草稿与操作人编号、请求快照、预期结果、GitHub 响应或错误、历次验证结果和时间；`audit_logs` 保存执行、验证及中断恢复等操作的审计记录。验证只确认回读时的状态；`send_report` 当前仅保存本地报告，不涉及外部发送验证。
+
+实现见 [执行与独立验证](backend/app/services/github/action_execution.py)、[确认与重新验证接口](backend/app/api/routes/action_drafts.py)；确定性回归覆盖 [写入、回读与恢复](backend/app/tests/test_github_action_execution.py) 和 [聊天草稿到负责人验证](backend/app/tests/test_chat_github_drafts.py)。
 
 ## 快速开始
 
@@ -163,7 +185,9 @@ Content-Type: application/json
 }
 ```
 
-提交接口会立即返回 `queued` 状态和 `eval_id`，ChatAgent 与 RAGAS 在后台继续运行。通过 `GET /api/evals/{eval_id}` 轮询 `result.progress`；状态变为 `passed`、`failed`、`error` 或 `no_cases` 时结束。网页会自动轮询，刷新或离开页面不会中断已经提交的任务。
+提交接口会立即返回 `queued` 状态和 `eval_id`，ChatAgent 与 RAGAS 在后台继续运行。通过 `GET /api/evals/{eval_id}` 轮询 `result.progress`；状态变为 `passed`、`failed`、`error`、`cancelled` 或 `no_cases` 时结束。网页会自动轮询，刷新或离开页面不会中断已经提交的任务。
+
+单次完整评测和异常指标重评分默认最多运行 30 分钟，可通过 `EVAL_JOB_TIMEOUT_SECONDS` 调整；单项 Judge 超时仍由 `RAGAS_TIMEOUT_SECONDS` 控制。运行中可点击“取消评测”（`POST /api/evals/{eval_id}/cancel`），结束后可“重新运行”（`POST /api/evals/{eval_id}/rerun`），生成新记录并保留原结果。新任务会保存实际用例和参数供重跑使用；旧自动冒烟记录缺少输入时按当前资料重新出题。当前为单 worker 进程内执行，后端重启会把遗留活跃任务标记为错误，页面不再一直等待。
 
 整体通过要求硬规则全部满足，并且五项语义指标都达到 `.env` 中对应的 `RAGAS_*_MIN` 门槛。页面把“执行状态”和“质量状态”分开显示：低分是质量失败；Judge 调用失败或指标缺失是评测不完整，不能伪装成质量结论。
 

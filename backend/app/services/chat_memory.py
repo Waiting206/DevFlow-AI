@@ -1,3 +1,4 @@
+import asyncio
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -1121,12 +1122,17 @@ class SessionSealer:
         )
         self.db.add(session)
         self.db.flush()
+        # The completed answer and conversation update must release their write
+        # locks before memory extraction awaits a remote model. Otherwise another
+        # request can block the event loop on that lock and prevent this one
+        # from ever resuming to commit.
+        self.db.commit()
 
         errors: list[str] = []
         memory_update = fallback_update
         digest = fallback_digest
         try:
-            memory_update = await self._build_memory_update(
+            memory_update = await asyncio.wait_for(self._build_memory_update(
                 user_message.content,
                 assistant_message.content,
                 route,
@@ -1134,10 +1140,11 @@ class SessionSealer:
                 fallback_digest,
                 repo_id=repo.id if repo else None,
                 conversation_id=conversation.id if conversation else None,
-            )
+            ), timeout=settings.session_memory_timeout_seconds)
             digest = str(memory_update.pop("_digest", "") or memory_update.get("summary") or fallback_digest)
         except Exception as exc:  # model/network failures must not invalidate the completed chat turn
-            errors.append(f"memory_extraction_failed: {exc}")
+            detail = f"exceeded {settings.session_memory_timeout_seconds:g}s" if isinstance(exc, TimeoutError) else str(exc)
+            errors.append(f"memory_extraction_failed: {type(exc).__name__}: {detail}")
             memory_update = fallback_update
             digest = fallback_digest
 

@@ -1,7 +1,6 @@
-import asyncio
 import hashlib
 import json
-import logging
+from dataclasses import asdict
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -9,20 +8,21 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.models import ActionDraft, EvalRun, Repository, User
-from app.db.session import SessionLocal, get_db
+from app.db.session import get_db
 from app.schemas.evals import EvalIssueDraftRequest, EvalRunRequest, EvalRunResponse
 from app.services.evals.ragas_runner import (
     REQUIRED_RAGAS_METRICS,
     RagEvalCase,
+    _default_cases,
     rescore_rag_result,
     run_rag_quality_eval,
 )
+from app.services.evals.jobs import ACTIVE_STATUSES, cancel_eval_job, execute_eval_job
 from app.services.evals.suites import AUTO_SMOKE_SUITE_ID, list_eval_suites, load_eval_suite
 from app.services.evals.runner import run_basic_eval
 from app.services.permissions import require_permission, write_audit_log
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
 
 
 def _request_case(item) -> RagEvalCase:
@@ -120,6 +120,27 @@ async def run_rag_eval(
             "sha256": None,
             "case_count": None,
         }
+    return _queue_rag_eval(db, background_tasks, payload, cases, evaluation_set)
+
+
+def _queue_rag_eval(
+    db: Session,
+    background_tasks: BackgroundTasks,
+    payload: EvalRunRequest,
+    cases: list[RagEvalCase] | None,
+    evaluation_set: dict,
+    *,
+    rerun_of: str | None = None,
+) -> EvalRunResponse:
+    # Save resolved questions and parameters, rather than guessing them on retry.
+    resolved_cases = cases if cases is not None else _default_cases(db, str(payload.repo_id))
+    execution_input = {
+        "repo_id": str(payload.repo_id),
+        "name": payload.name,
+        "cases": [asdict(case) for case in resolved_cases],
+        "top_k": payload.top_k,
+        "run_judge": payload.run_judge,
+    }
     result = _job_result(
         status="queued",
         stage="queued",
@@ -127,6 +148,9 @@ async def run_rag_eval(
         repo_id=str(payload.repo_id),
         evaluation_set=evaluation_set,
     )
+    result.update(execution_input=execution_input, pipeline={"top_k": payload.top_k}, run_mode="full")
+    if rerun_of:
+        result["rerun_of"] = rerun_of
     eval_run = EvalRun(name=payload.name or "rag_eval", result_json=result)
     db.add(eval_run)
     db.commit()
@@ -135,7 +159,7 @@ async def run_rag_eval(
         _execute_rag_eval_job,
         str(eval_run.id),
         str(payload.repo_id),
-        cases,
+        resolved_cases,
         payload.top_k,
         payload.run_judge,
         evaluation_set,
@@ -151,77 +175,19 @@ async def _execute_rag_eval_job(
     run_judge: bool,
     evaluation_set: dict,
 ) -> None:
-    db = SessionLocal()
-    # Yield once after Starlette sends the queued response so the client receives
-    # the Eval ID before imports, index loading, or model setup can block the loop.
-    await asyncio.sleep(0)
-
-    async def persist_progress(progress: dict) -> None:
-        eval_run = db.get(EvalRun, UUID(eval_id))
-        if eval_run is None:
-            return
-        eval_run.result_json = _job_result(
-            status="running",
-            stage=str(progress.get("stage") or "running"),
-            message=str(progress.get("message") or "评测正在后台运行。"),
-            repo_id=repo_id,
-            evaluation_set=evaluation_set,
-            **{
-                key: value
-                for key, value in progress.items()
-                if key not in {"stage", "message"}
-            },
-        )
-        db.add(eval_run)
-        db.commit()
-
-    try:
-        await persist_progress({"stage": "starting", "message": "后台任务已启动，正在加载仓库上下文。"})
-        result = await run_rag_quality_eval(
+    async def operation(db: Session, progress) -> dict:
+        await progress({"stage": "starting", "message": "后台任务已启动，正在加载仓库上下文。"})
+        return await run_rag_quality_eval(
             db,
             repo_id,
             cases=cases,
             limit=limit,
             run_judge=run_judge,
-            progress_callback=persist_progress,
+            progress_callback=progress,
             evaluation_set=evaluation_set,
-        )
-        result["progress"] = {
-            "stage": "completed",
-            "message": "评测已完成。",
-            "updated_at": datetime.now(UTC).isoformat(),
-        }
-    except Exception as exc:
-        logger.exception("RAGAS background evaluation failed: eval_id=%s", eval_id)
-        result = _job_result(
-            status="error",
-            stage="error",
-            message=f"评测运行失败：{exc}",
-            repo_id=repo_id,
-            evaluation_set=evaluation_set,
-        )
-        result.update(
-            {
-                "passed": False,
-                "ragas": {
-                    "requested": run_judge,
-                    "available": False,
-                    "passed": None,
-                    "error": f"{type(exc).__name__}: {exc}",
-                    "metrics": {},
-                },
-                "cases": [],
-            }
         )
 
-    try:
-        eval_run = db.get(EvalRun, UUID(eval_id))
-        if eval_run is not None:
-            eval_run.result_json = result
-            db.add(eval_run)
-            db.commit()
-    finally:
-        db.close()
+    await execute_eval_job(eval_id, operation)
 
 
 def _job_result(
@@ -262,6 +228,8 @@ async def rescore_eval(
     if source is None:
         raise HTTPException(status_code=404, detail="未找到 Eval run")
     source_result = source.result_json or {}
+    if source_result.get("status") in ACTIVE_STATUSES:
+        raise HTTPException(status_code=409, detail="请先取消正在运行的评测")
     if not source_result.get("cases"):
         raise HTTPException(status_code=400, detail="原评测没有可用于重评分的逐题现场")
     error_count = sum(bool(item.get("ragas_errors")) for item in source_result.get("cases") or [])
@@ -281,7 +249,11 @@ async def rescore_eval(
         evaluation_set=evaluation_set,
         rescore_of=str(eval_id),
     )
-    target = EvalRun(name=f"rescore-{source.name}", result_json=queued)
+    queued["run_mode"] = "rescore"
+    queued["rescore_of"] = str(eval_id)
+    queued["pipeline"] = source_result.get("pipeline") or {}
+    queued["cases"] = source_result.get("cases") or []
+    target = EvalRun(name=f"rescore-{source.name}"[:200], result_json=queued)
     db.add(target)
     db.commit()
     db.refresh(target)
@@ -303,63 +275,76 @@ async def _execute_rescore_job(
     repo_id: str,
     evaluation_set: dict,
 ) -> None:
-    db = SessionLocal()
-    await asyncio.sleep(0)
-
-    async def persist_progress(progress: dict) -> None:
-        row = db.get(EvalRun, UUID(target_eval_id))
-        if row is None:
-            return
-        row.result_json = _job_result(
-            status="running",
-            stage=str(progress.get("stage") or "rescore"),
-            message=str(progress.get("message") or "正在重试异常评分。"),
-            repo_id=repo_id or None,
-            evaluation_set=evaluation_set,
-            rescore_of=source_eval_id,
-            **{key: value for key, value in progress.items() if key not in {"stage", "message"}},
-        )
-        db.add(row)
-        db.commit()
-
-    try:
-        result = await rescore_rag_result(
+    async def operation(db: Session, progress) -> dict:
+        await progress({"stage": "rescore", "message": "正在重试异常评分。"})
+        return await rescore_rag_result(
             source_result,
             eval_id=source_eval_id,
-            progress_callback=persist_progress,
+            progress_callback=progress,
         )
-        result["progress"] = {
-            "stage": "completed",
-            "message": "异常指标重评分已完成；ChatAgent 回答和检索现场均未重新运行。",
-            "updated_at": datetime.now(UTC).isoformat(),
-        }
-    except Exception as exc:
-        logger.exception("RAGAS rescore failed: eval_id=%s", target_eval_id)
-        result = _job_result(
-            status="error",
-            stage="error",
-            message=f"重评分失败：{exc}",
-            repo_id=repo_id or None,
-            evaluation_set=evaluation_set,
-            rescore_of=source_eval_id,
+
+    await execute_eval_job(target_eval_id, operation)
+
+
+@router.post("/{eval_id}/cancel", response_model=EvalRunResponse)
+async def cancel_eval(
+    eval_id: UUID,
+    db: Session = Depends(get_db),
+    _user=Depends(require_permission("eval:read")),
+) -> EvalRunResponse:
+    row = db.get(EvalRun, eval_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="未找到 Eval run")
+    cancel_eval_job(db, row)
+    db.refresh(row)
+    result = row.result_json or {}
+    return EvalRunResponse(eval_id=str(row.id), status=result.get("status") or "completed", result=result)
+
+
+@router.post("/{eval_id}/rerun", response_model=EvalRunResponse)
+async def rerun_eval(
+    eval_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _user=Depends(require_permission("eval:read")),
+) -> EvalRunResponse:
+    row = db.get(EvalRun, eval_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="未找到 Eval run")
+    source = row.result_json or {}
+    if source.get("status") in ACTIVE_STATUSES:
+        raise HTTPException(status_code=409, detail="请先取消正在运行的评测")
+    if source.get("kind") != "chatagent_ragas":
+        raise HTTPException(status_code=400, detail="该记录不支持重新运行 RAGAS 评测")
+    if source.get("run_mode") == "rescore" and source.get("rescore_of"):
+        response = await rescore_eval(UUID(source["rescore_of"]), background_tasks, db, _user)
+        target = db.get(EvalRun, UUID(response.eval_id))
+        target.result_json = {**target.result_json, "rerun_of": str(row.id)}
+        db.commit()
+        response.result = target.result_json
+        return response
+    saved_input = source.get("execution_input")
+    evaluation_set = dict(source.get("evaluation_set") or {})
+    if saved_input:
+        payload = EvalRunRequest.model_validate(saved_input)
+        cases = [_request_case(item) for item in payload.cases or []]
+    elif evaluation_set.get("source") == "auto_smoke":
+        # Old smoke runs did not persist the input. Regenerate explicitly and
+        # retain that fact; do not claim an exact replay of the old questions.
+        payload = EvalRunRequest(
+            repo_id=(source.get("target") or {}).get("repo_id"),
+            name=row.name,
+            top_k=(source.get("pipeline") or {}).get("top_k", 5),
+            run_judge=(source.get("ragas") or {}).get("requested", True),
         )
-        result["ragas"] = {
-            "requested": True,
-            "available": False,
-            "complete": False,
-            "passed": None,
-            "error": f"{type(exc).__name__}: {exc}",
-            "metrics": {},
-        }
-        result["cases"] = source_result.get("cases") or []
-    try:
-        row = db.get(EvalRun, UUID(target_eval_id))
-        if row is not None:
-            row.result_json = result
-            db.add(row)
-            db.commit()
-    finally:
-        db.close()
+        cases = None
+        evaluation_set["description"] = "旧记录未保存完整输入；按当前仓库资料重新生成冒烟用例。"
+    else:
+        raise HTTPException(status_code=400, detail="旧记录未保存评测输入，请选择评测集重新运行")
+    if payload.repo_id is None or db.get(Repository, payload.repo_id) is None:
+        raise HTTPException(status_code=404, detail="未找到仓库")
+    payload.name = f"rerun-{row.name}"[:200]
+    return _queue_rag_eval(db, background_tasks, payload, cases, evaluation_set, rerun_of=str(row.id))
 
 
 def _eval_comparison(base: EvalRun, candidate: EvalRun) -> dict:

@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, selectinload
+from pydantic import ValidationError
 
 from app.core.config import settings
 from app.db.models import ActionDraft, AgentRun, AgentTaskRun, AgentWorkflowRun, ChatMessage, Conversation, Issue, PullRequest, Repository, WorkflowRun
@@ -32,6 +33,7 @@ from app.services.rag.vector_store import add_document
 from app.schemas.workflow import WorkflowSpec, WorkflowTask, WorkflowTaskResult
 from app.services.skills import SkillRegistry, get_skill_registry
 from app.services.permissions import ensure_demo_user, write_audit_log
+from app.services.github.draft_builder import DraftInputError, infer_action, resolve_draft
 
 router = APIRouter()
 
@@ -223,16 +225,7 @@ def _source_type_from_message(message: str) -> str | None:
 
 
 def _risky_action(message: str) -> str | None:
-    lowered = message.lower()
-    if any(token in lowered for token in ["comment", "reply", "post"]):
-        return "comment"
-    if any(token in lowered for token in ["create issue", "new issue"]):
-        return "create_issue"
-    if any(token in lowered for token in ["send", "send_report"]):
-        return "send_report"
-    if any(token in lowered for token in ["close issue", "label", "write"]):
-        return "write_back"
-    return None
+    return infer_action(message)
 
 
 def _date_window_from_context(context: dict[str, Any]) -> tuple[datetime, datetime]:
@@ -1239,28 +1232,37 @@ def _build_conversation_tools(repo: Repository | None, conversation: Conversatio
     async def check_safety(input_data: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
         if repo is None:
             return await repo_health(input_data, context)
-        issues, prs, runs = _repo_payload(repo.id, db)
-        action = _risky_action(input_data["message"]) or "write_back"
-        draft, citations = _draft_for_action(action, input_data["message"], repo, issues, prs, runs)
-        safety = await SafetyAgent().run({"action": action, "draft": draft}, agent_context(context))
-        latest_issue = sorted(issues, key=_item_time, reverse=True)[0] if issues else None
-        latest_pr = sorted(prs, key=_item_time, reverse=True)[0] if prs else None
-        target_type = "repository"
+        try:
+            resolved = resolve_draft(input_data, owner=repo.owner, repo=repo.name)
+        except (DraftInputError, ValidationError) as exc:
+            return {
+                "route": "safety_clarification", "requires_clarification": True,
+                "answer": f"尚未生成可执行草稿：{exc}", "citations": [],
+                "tool_calls": [{"tool_name": "safety_agent.classify_action_risk", "arguments": input_data, "status": "needs_clarification"}],
+            }
+        action = resolved["action"]
+        safety = await SafetyAgent().run({"action": action, "draft": resolved["content"]}, agent_context(context))
+        target_type = resolved["target_type"] or "repository"
         target_id = None
-        metadata: dict[str, Any] = {"source": "chat", "message": input_data["message"]}
-        if action == "comment" and latest_pr:
-            target_type = "pull_request"
-            target_id = latest_pr.id
-            metadata["pr_number"] = latest_pr.number
-        elif action in {"comment", "create_issue", "close_issue"} and latest_issue:
-            target_type = "issue"
-            target_id = latest_issue.id
-            metadata["issue_number"] = latest_issue.number
+        metadata: dict[str, Any] = {
+            "source": "chat", "message": input_data.get("message") or "",
+            "conversation_id": str(conversation.id) if conversation else None,
+        }
+        citations = [{"type": "repository", "id": str(repo.id), "title": repo.full_name}]
+        number = resolved["target_number"]
+        if number is not None:
+            metadata["target_number"] = number
+            model = PullRequest if target_type == "pull_request" else Issue
+            target = db.query(model).filter(model.repo_id == repo.id, model.number == number).first()
+            if target:
+                target_id = target.id
+                citations.append({"type": target_type, "id": str(target.id), "title": target.title})
+        if resolved["labels"]:
+            metadata["labels"] = resolved["labels"]
+        if resolved["assignees"]:
+            metadata["assignees"] = resolved["assignees"]
         draft_type = {
             "comment": "pr_comment" if target_type == "pull_request" else "issue_comment",
-            "create_issue": "create_issue",
-            "send_report": "send_report",
-            "write_back": "comment",
         }.get(action, action)
         user = ensure_demo_user(db)
         action_draft = ActionDraft(
@@ -1268,8 +1270,8 @@ def _build_conversation_tools(repo: Repository | None, conversation: Conversatio
             draft_type=draft_type,
             target_type=target_type,
             target_id=target_id,
-            title=f"{draft_type} 草稿",
-            content=str(safety.get("draft") or draft),
+            title=resolved["title"],
+            content=resolved["content"],
             risk_level=str(safety.get("risk_level") or "medium"),
             created_by=user.id,
             meta=metadata,
@@ -1286,10 +1288,11 @@ def _build_conversation_tools(repo: Repository | None, conversation: Conversatio
             request_json={"action": action, "draft_type": draft_type},
             result_json={"draft_id": str(action_draft.id)},
         )
+        target_description = f"{target_type} #{number}" if number is not None else "创建新 Issue（编号由 GitHub 分配）" if action == "create_issue" else "本地报告"
         return {
             "route": "safety_draft",
             "tool_calls": [{"tool_name": "safety_agent.classify_action_risk", "arguments": {"action": action, "draft_id": str(action_draft.id)}, "status": "success"}],
-            "answer": f"这个请求可能写入 GitHub 或发送到外部渠道，已生成待确认安全草稿。\n\n草稿 ID：{action_draft.id}\n\n{str(safety.get('draft') or draft)}",
+            "answer": f"已生成待确认安全草稿，尚未写入 GitHub。\n\n草稿 ID：{action_draft.id}\n操作：{draft_type}\n目标：{target_description}\n标题：{resolved['title']}\n负责人：{', '.join(resolved['assignees']) or '未指定'}\n\n{resolved['content']}",
             "citations": citations,
         }
 

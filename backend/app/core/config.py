@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -42,6 +43,7 @@ class Settings(BaseSettings):
     ragas_judge_base_url: str | None = None
     ragas_judge_model: str | None = None
     ragas_timeout_seconds: float = 120.0
+    eval_job_timeout_seconds: float = Field(default=1800.0, gt=0)
     ragas_judge_max_tokens: int = 8192
     ragas_answer_relevancy_strictness: int = 1
     ragas_max_cases: int = 5
@@ -66,6 +68,7 @@ class Settings(BaseSettings):
     context_microcompact_keep_recent_messages: int = 8
     context_compact_keep_recent_messages: int = 8
     context_compact_summary_tokens: int = 1800
+    session_memory_timeout_seconds: float = Field(default=20.0, gt=0)
     context_system_ratio: float = 0.12
     context_memory_ratio: float = 0.22
     context_evidence_ratio: float = 0.34

@@ -44,14 +44,25 @@ class GitHubClient:
     async def get_repo(self, owner: str, repo: str) -> dict[str, Any]:
         return await self.get(f"/repos/{owner}/{repo}")
 
+    async def get_issue(self, owner: str, repo: str, issue_number: int) -> dict[str, Any]:
+        return await self.get(f"/repos/{owner}/{repo}/issues/{issue_number}")
+
+    async def get_issue_comment(self, owner: str, repo: str, comment_id: int) -> dict[str, Any]:
+        return await self.get(f"/repos/{owner}/{repo}/issues/comments/{comment_id}")
+
     async def create_issue_comment(self, owner: str, repo: str, issue_number: int, body: str) -> dict[str, Any]:
         return await self.post(f"/repos/{owner}/{repo}/issues/{issue_number}/comments", {"body": body})
 
-    async def create_issue(self, owner: str, repo: str, title: str, body: str) -> dict[str, Any]:
-        return await self.post(f"/repos/{owner}/{repo}/issues", {"title": title, "body": body})
+    async def create_issue(self, owner: str, repo: str, title: str, body: str, *, assignees: list[str] | None = None, labels: list[str] | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"title": title, "body": body}
+        if assignees:
+            payload["assignees"] = assignees
+        if labels:
+            payload["labels"] = labels
+        return await self.post(f"/repos/{owner}/{repo}/issues", payload)
 
     async def close_issue(self, owner: str, repo: str, issue_number: int) -> dict[str, Any]:
         return await self.patch(f"/repos/{owner}/{repo}/issues/{issue_number}", {"state": "closed"})
 
-    async def add_issue_labels(self, owner: str, repo: str, issue_number: int, labels: list[str]) -> dict[str, Any]:
+    async def add_issue_labels(self, owner: str, repo: str, issue_number: int, labels: list[str]) -> list[dict[str, Any]]:
         return await self.post(f"/repos/{owner}/{repo}/issues/{issue_number}/labels", {"labels": labels})

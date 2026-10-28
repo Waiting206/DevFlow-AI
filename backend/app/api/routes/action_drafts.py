@@ -1,15 +1,18 @@
+import asyncio
 from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import decrypt_token
-from app.db.models import ActionDraft, AuditLog, Issue, PullRequest, Repository, User
+from app.db.models import ActionDraft, ActionExecution, AuditLog, Issue, PullRequest, Repository, User
 from app.db.session import get_db
 from app.schemas.action_drafts import ActionDraftConfirmResponse, ActionDraftCreateRequest, ActionDraftResponse, AuditLogResponse
 from app.services.github.client import GitHubClient
+from app.services.github.action_execution import error_summary, execute_action, prepare_action, verify_action, write_failure_status
 from app.services.permissions import require_permission, write_audit_log
 
 router = APIRouter()
@@ -32,34 +35,64 @@ def _target_number(db: Session, draft: ActionDraft) -> int | None:
     return None
 
 
-async def _execute_github_draft(db: Session, draft: ActionDraft, repo: Repository) -> dict:
+def _github_client(repo: Repository, request: dict) -> GitHubClient:
     token = decrypt_token(repo.github_token_encrypted, settings.token_encryption_key) if repo.github_token_encrypted else None
-    client = GitHubClient(token=token, base_url=repo.api_base_url)
-    draft_type = draft.draft_type.lower()
-    issue_number = _target_number(db, draft)
-    if draft_type in {"issue_comment", "pr_comment", "comment"}:
-        if issue_number is None:
-            raise RuntimeError("评论草稿缺少 issue/pr number")
-        return await client.create_issue_comment(repo.owner, repo.name, issue_number, draft.content)
-    if draft_type == "create_issue":
-        title = draft.title or (draft.content.splitlines()[0][:120] if draft.content else "RepoPilot AI Issue")
-        return await client.create_issue(repo.owner, repo.name, title, draft.content)
-    if draft_type == "close_issue":
-        if issue_number is None:
-            raise RuntimeError("关闭 Issue 草稿缺少 issue number")
-        return await client.close_issue(repo.owner, repo.name, issue_number)
-    if draft_type in {"label", "add_label", "add_labels"}:
-        if issue_number is None:
-            raise RuntimeError("Label 草稿缺少 issue/pr number")
-        labels = draft.meta.get("labels") if draft.meta else None
-        if not isinstance(labels, list) or not labels:
-            labels = [draft.title] if draft.title else []
-        if not labels:
-            raise RuntimeError("Label 草稿缺少 labels")
-        return await client.add_issue_labels(repo.owner, repo.name, issue_number, [str(item) for item in labels])
-    if draft_type == "send_report":
-        return {"status": "recorded", "message": "报告草稿已在 RepoPilot AI 中标记为已发送，未接入外部消息渠道。"}
-    raise RuntimeError(f"暂不支持执行草稿类型：{draft.draft_type}")
+    return GitHubClient(token=token, base_url=request["api_base_url"])
+
+
+def _execution_audit(db: Session, execution: ActionExecution, user: User, action: str, status: str, result: dict) -> AuditLog:
+    return write_audit_log(
+        db, user=user, repo_id=execution.repo_id, action=action,
+        target_type="action_execution", target_id=str(execution.id), status=status,
+        request_json={"draft_id": str(execution.draft_id), "execution_id": str(execution.id)},
+        result_json=result,
+    )
+
+
+async def _verify_execution(db: Session, execution: ActionExecution, repo: Repository, user: User) -> AuditLog:
+    claimed = db.execute(
+        update(ActionExecution).where(
+            ActionExecution.id == execution.id,
+            ActionExecution.write_status != "running",
+            ActionExecution.verification_status != "checking",
+        ).values(verification_status="checking").execution_options(synchronize_session=False)
+    ).rowcount
+    if not claimed:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="操作仍在执行或验证中，请稍后刷新")
+    db.refresh(execution)
+    started = {
+        "status": "checking", "message": "开始独立回读验证。",
+        "checked_at": datetime.now(timezone.utc).isoformat(), "checked_by": str(user.id),
+    }
+    execution.verification_checks = [*execution.verification_checks, started]
+    _execution_audit(db, execution, user, "action_draft.verify.start", "running", started)
+    db.commit()
+    try:
+        check = await verify_action(
+            _github_client(repo, execution.request_json), execution.request_json,
+            execution.expected_state, execution.write_result,
+        )
+    except asyncio.CancelledError:
+        execution.verification_status = "unknown"
+        check = {
+            **started,
+            "status": "unknown", "message": "验证被中断，可稍后重新验证。",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        execution.verification_checks = [*execution.verification_checks[:-1], check]
+        _execution_audit(db, execution, user, "action_draft.verify", "unknown", check)
+        db.commit()
+        raise
+    except Exception as exc:
+        check = {"status": "unknown", "message": "验证未能完成。", "error": error_summary(exc), "checked_at": datetime.now(timezone.utc).isoformat()}
+    check = {**started, **check, "completed_at": datetime.now(timezone.utc).isoformat()}
+    execution.verification_status = check["status"]
+    execution.verified_at = datetime.now(timezone.utc)
+    execution.verification_checks = [*execution.verification_checks[:-1], check]
+    audit = _execution_audit(db, execution, user, "action_draft.verify", check["status"], check)
+    db.commit()
+    return audit
 
 
 @router.post("", response_model=ActionDraftResponse)
@@ -147,7 +180,13 @@ async def cancel_action_draft(
         raise HTTPException(status_code=404, detail="未找到安全草稿")
     if draft.status != "pending_confirmation":
         raise HTTPException(status_code=400, detail="只有待确认草稿可以取消")
-    draft.status = "cancelled"
+    changed = db.execute(
+        update(ActionDraft).where(ActionDraft.id == draft_id, ActionDraft.status == "pending_confirmation")
+        .values(status="cancelled").execution_options(synchronize_session=False)
+    ).rowcount
+    if not changed:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="草稿状态已变化，请刷新")
     write_audit_log(db, user=user, repo_id=draft.repo_id, action="action_draft.cancel", target_type=draft.target_type, target_id=str(draft.id))
     db.commit()
     db.refresh(draft)
@@ -169,40 +208,83 @@ async def confirm_action_draft(
     if repo is None:
         raise HTTPException(status_code=404, detail="未找到仓库")
     try:
-        # 确认入口完成权限和状态校验后，才执行外部操作并记录执行结果与审计日志。
-        result = await _execute_github_draft(db, draft, repo)
-        draft.status = "executed"
-        draft.confirmed_by = user.id
-        draft.executed_at = datetime.now(timezone.utc)
-        draft.execution_result = result
-        audit = write_audit_log(
-            db,
-            user=user,
-            repo_id=draft.repo_id,
-            action=f"action_draft.confirm.{draft.draft_type}",
-            target_type=draft.target_type,
-            target_id=str(draft.target_id or draft.id),
-            status="success",
-            request_json={"draft_id": str(draft.id), "draft_type": draft.draft_type},
-            result_json=result if isinstance(result, dict) else {"result": result},
-        )
-    except Exception as exc:
-        draft.status = "failed"
-        draft.confirmed_by = user.id
-        draft.executed_at = datetime.now(timezone.utc)
-        draft.error_message = str(exc)
-        audit = write_audit_log(
-            db,
-            user=user,
-            repo_id=draft.repo_id,
-            action=f"action_draft.confirm.{draft.draft_type}",
-            target_type=draft.target_type,
-            target_id=str(draft.target_id or draft.id),
-            status="failed",
-            request_json={"draft_id": str(draft.id), "draft_type": draft.draft_type},
-            result_json={"error": str(exc)},
-        )
+        request, expected = prepare_action(draft, repo, _target_number(db, draft))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # Commit the claim and immutable request before issuing any external write.
+    changed = db.execute(
+        update(ActionDraft).where(ActionDraft.id == draft_id, ActionDraft.status == "pending_confirmation")
+        .values(status="executing", confirmed_by=user.id).execution_options(synchronize_session=False)
+    ).rowcount
+    if not changed:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="草稿已被确认或取消，请刷新")
+    execution = ActionExecution(
+        draft_id=draft.id, repo_id=repo.id, operator_id=user.id,
+        request_json=request, expected_state=expected,
+    )
+    db.add(execution)
+    db.flush()
+    _execution_audit(db, execution, user, "action_draft.execute.start", "running", {"expected_state": expected})
     db.commit()
     db.refresh(draft)
-    db.refresh(audit)
+    try:
+        result = await execute_action(_github_client(repo, request), request)
+    except asyncio.CancelledError:
+        execution.write_status = draft.status = "unknown"
+        execution.write_error = draft.error_message = "执行被中断，GitHub 可能已接收操作；不会自动重发。"
+        execution.verification_status = "unknown"
+        _execution_audit(db, execution, user, "action_draft.execute.interrupted", "unknown", {"error": execution.write_error})
+        db.commit()
+        raise
+    except Exception as exc:
+        execution.write_status = write_failure_status(exc)
+        execution.write_error = error_summary(exc)
+        draft.status = execution.write_status
+        draft.error_message = execution.write_error
+    else:
+        execution.write_status = "succeeded"
+        execution.write_result = result
+        draft.status = "executed"
+        draft.execution_result = result if isinstance(result, dict) else {"result": result}
+    execution.write_completed_at = draft.executed_at = datetime.now(timezone.utc)
+    if execution.write_status == "failed":
+        execution.verification_status = "not_applicable"
+        execution.verification_checks = [{
+            "status": "not_applicable", "message": "GitHub 明确拒绝写入，未执行结果验证。",
+            "checked_at": datetime.now(timezone.utc).isoformat(), "checked_by": str(user.id),
+        }]
+    audit = _execution_audit(
+        db, execution, user, f"action_draft.confirm.{draft.draft_type}",
+        "success" if execution.write_status == "succeeded" else execution.write_status,
+        {"response": execution.write_result, "error": execution.write_error},
+    )
+    # Persist the write response even if the subsequent independent read fails.
+    db.commit()
+    audit_id = audit.id
+    if execution.write_status != "failed":
+        await _verify_execution(db, execution, repo, user)
+    db.refresh(draft)
+    return {"draft": draft, "audit_id": audit_id}
+
+
+@router.post("/{draft_id}/verify", response_model=ActionDraftConfirmResponse)
+async def verify_action_draft(
+    draft_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission("draft:approve")),
+) -> dict:
+    draft = db.get(ActionDraft, draft_id)
+    if draft is None:
+        raise HTTPException(status_code=404, detail="未找到安全草稿")
+    execution = draft.execution
+    if execution is None:
+        raise HTTPException(status_code=400, detail="此草稿没有可验证的执行记录；旧记录不补记为已验证")
+    if execution.write_status == "failed":
+        raise HTTPException(status_code=400, detail="GitHub 已明确拒绝该写入，无待验证结果")
+    repo = db.get(Repository, execution.repo_id)
+    if repo is None:
+        raise HTTPException(status_code=404, detail="未找到仓库")
+    audit = await _verify_execution(db, execution, repo, user)
+    db.refresh(draft)
     return {"draft": draft, "audit_id": audit.id}

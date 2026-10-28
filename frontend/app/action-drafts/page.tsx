@@ -12,6 +12,7 @@ type ActionDraft = {
   repo_id: string;
   draft_type: string;
   target_type: string;
+  target_id?: string | null;
   title: string;
   content: string;
   risk_level: string;
@@ -20,13 +21,32 @@ type ActionDraft = {
   error_message?: string | null;
   created_at: string;
   executed_at?: string | null;
+  meta?: { target_number?: number; issue_number?: number; pr_number?: number; assignees?: string[]; labels?: string[] };
+  execution?: ActionExecution | null;
+};
+
+type ActionExecution = {
+  id: string;
+  operator_id: string;
+  write_status: string;
+  verification_status: string;
+  started_at: string;
+  write_completed_at?: string | null;
+  verified_at?: string | null;
+  request_json: Record<string, unknown>;
+  expected_state: Record<string, unknown>;
+  write_result?: unknown;
+  write_error?: string | null;
+  verification_checks: Array<{ status: string; message: string; checked_at: string; [key: string]: unknown }>;
 };
 
 type AuditLog = { id: string; action: string; status: string; target_type?: string | null; target_id?: string | null; created_at: string };
 
 const statusMeta: Record<string, { label: string; className: string }> = {
   pending_confirmation: { label: "等待人工确认", className: "bg-warning-soft text-warning border-warning-line" },
-  executed: { label: "已确认并执行", className: "bg-success-soft text-success border-success-line" },
+  executing: { label: "正在执行", className: "bg-warning-soft text-warning border-warning-line" },
+  executed: { label: "执行请求已完成", className: "bg-elevated text-content border-line" },
+  unknown: { label: "写入结果待确认", className: "bg-warning-soft text-warning border-warning-line" },
   cancelled: { label: "已取消", className: "bg-elevated text-muted border-line" },
   failed: { label: "执行失败", className: "bg-danger-soft text-danger border-danger-line" }
 };
@@ -39,6 +59,7 @@ export default function ActionDraftsPage() {
   const [title, setTitle] = useState("发布检查报告");
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   async function load(repo = repoId) {
     const suffix = repo ? `?repo_id=${repo}` : "";
@@ -63,6 +84,7 @@ export default function ActionDraftsPage() {
   async function createDraft() {
     if (!repoId || !content.trim()) return;
     setLoading(true);
+    setError("");
     try {
       await apiPost<ActionDraft>("/api/action-drafts", {
         repo_id: repoId,
@@ -75,16 +97,22 @@ export default function ActionDraftsPage() {
       });
       setContent("");
       await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "创建草稿失败");
     } finally {
       setLoading(false);
     }
   }
 
-  async function changeDraft(id: string, action: "confirm" | "cancel") {
+  async function changeDraft(id: string, action: "confirm" | "cancel" | "verify") {
     setLoading(true);
+    setError("");
     try {
       await apiPost(`/api/action-drafts/${id}/${action}`, {});
       await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "操作未能完成，请刷新查看执行记录");
+      await load().catch(() => undefined);
     } finally {
       setLoading(false);
     }
@@ -95,7 +123,8 @@ export default function ActionDraftsPage() {
 
   return (
     <>
-      <PageTitle title="安全草稿与人工确认" description="Agent 的外部写操作先落成可审查草稿；只有具备批准权限的人确认后，系统才执行并写入审计记录。" />
+      <PageTitle title="安全草稿与人工确认" description="人工确认后执行 GitHub 操作，再独立读取实际结果验证，并保存执行与验证记录。" />
+      {error && <div role="alert" className="mt-3 rounded-md bg-danger-soft p-3 text-sm text-danger">{error}</div>}
 
       <section className="grid gap-3 border-y border-line bg-surface px-4 py-4 sm:grid-cols-3">
         <Summary icon={FileText} label="全部草稿" value={drafts.length} />
@@ -124,6 +153,9 @@ export default function ActionDraftsPage() {
         <div className="space-y-4">
           {drafts.map((draft) => {
             const meta = statusMeta[draft.status] || { label: draft.status, className: "bg-panel text-muted border-line" };
+            const targetNumber = draft.meta?.target_number || draft.meta?.issue_number || draft.meta?.pr_number;
+            const missingTarget = ["comment", "issue_comment", "pr_comment", "close_issue", "label", "add_label", "add_labels"].includes(draft.draft_type)
+              && !targetNumber && !draft.target_id;
             return (
               <article key={draft.id} className="rounded-md border border-line bg-surface p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -134,16 +166,25 @@ export default function ActionDraftsPage() {
                       <span className={`rounded-full px-2.5 py-1 text-xs ${draft.risk_level === "high" ? "bg-danger-soft text-danger" : "bg-elevated text-muted"}`}>{draft.risk_level === "high" ? "高风险" : "中低风险"}</span>
                     </div>
                     <div className="mt-2 text-xs text-muted">{draft.draft_type} · {draft.target_type} · {new Date(draft.created_at).toLocaleString("zh-CN")}</div>
+                    {draft.draft_type === "create_issue" && <p className="mt-2 text-xs text-content">创建新 Issue，编号由 GitHub 自动分配。</p>}
+                    {targetNumber && <p className="mt-2 text-xs text-content">目标：{draft.target_type === "pull_request" ? "PR" : "Issue"} #{targetNumber}</p>}
+                    {Boolean(draft.meta?.assignees?.length) && <p className="mt-2 text-xs text-content">GitHub 负责人：{draft.meta?.assignees?.map((login) => `@${login}`).join("、")}</p>}
+                    {Boolean(draft.meta?.labels?.length) && <p className="mt-2 text-xs text-content">标签：{draft.meta?.labels?.join("、")}</p>}
                   </div>
                   {draft.status === "pending_confirmation" && (
                     <div className="flex gap-2">
-                      <button className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent transition hover:bg-accent disabled:opacity-60" disabled={loading} onClick={() => changeDraft(draft.id, "confirm")}><Check className="h-4 w-4" />确认执行</button>
+                      <button className="inline-flex items-center gap-1 rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent transition hover:bg-accent disabled:opacity-60" disabled={loading || missingTarget} onClick={() => changeDraft(draft.id, "confirm")}><Check className="h-4 w-4" />确认执行</button>
                       <button className="inline-flex items-center gap-1 rounded-md border border-line px-3 py-2 text-sm text-muted transition hover:bg-panel disabled:opacity-60" disabled={loading} onClick={() => changeDraft(draft.id, "cancel")}><X className="h-4 w-4" />取消</button>
                     </div>
                   )}
                 </div>
                 <div className="mt-4 whitespace-pre-wrap rounded-md border-l-4 border-accent-line bg-panel px-4 py-3 text-sm leading-7 text-content">{draft.content}</div>
-                {draft.status === "executed" && <div className="mt-3 flex items-center gap-2 text-sm text-success"><CheckCircle2 className="h-4 w-4" />人工确认完成，执行结果和操作者已经写入审计记录。</div>}
+                {draft.status === "pending_confirmation" && missingTarget && <p className="mt-3 text-sm text-warning">此旧草稿未绑定 Issue/PR 目标，无法执行。请取消后，在聊天中说明完整操作和目标，重新生成草稿；创建新 Issue 不需要已有编号。</p>}
+                {draft.execution ? (
+                  <ExecutionRecord execution={draft.execution} loading={loading} onVerify={() => changeDraft(draft.id, "verify")} />
+                ) : draft.status === "executed" ? (
+                  <p className="mt-3 text-sm text-muted">历史执行记录：没有独立回读验证结果。</p>
+                ) : null}
                 {draft.error_message && <div className="mt-3 rounded-md bg-danger-soft p-3 text-sm text-danger">{draft.error_message}</div>}
               </article>
             );
@@ -156,7 +197,7 @@ export default function ActionDraftsPage() {
               {audits.slice(0, 10).map((item, index) => (
                 <div key={item.id} className="relative flex gap-3 pb-4">
                   {index < Math.min(audits.length, 10) - 1 && <span className="absolute left-[7px] top-4 h-full w-px bg-line" />}
-                  <span className={`relative mt-1 h-4 w-4 shrink-0 rounded-full border-4 border-white ${item.status === "success" ? "bg-success" : "bg-danger"}`} />
+                  <span className={`relative mt-1 h-4 w-4 shrink-0 rounded-full border-4 border-white ${["success", "verified"].includes(item.status) ? "bg-success" : item.status === "failed" ? "bg-danger" : "bg-warning"}`} />
                   <div><div className="text-sm font-medium text-ink">{auditLabel(item.action)}</div><div className="mt-1 text-xs text-muted">{item.status} · {new Date(item.created_at).toLocaleString("zh-CN")}</div></div>
                 </div>
               ))}
@@ -175,8 +216,40 @@ function Summary({ icon: Icon, label, value, tone = "teal" }: { icon: typeof Fil
 }
 
 function auditLabel(action: string) {
+  if (action === "action_draft.execute.start") return "已保存执行请求，开始执行";
+  if (action === "action_draft.execute.interrupted") return "执行中断，结果待确认";
+  if (action === "action_draft.execute.recovered") return "已恢复中断记录，结果待确认";
+  if (action === "action_draft.verify.start") return "开始独立回读验证";
+  if (action === "action_draft.verify") return "独立回读验证";
   if (action.startsWith("action_draft.confirm")) return "人工确认并执行草稿";
   if (action === "action_draft.create") return "创建待确认草稿";
   if (action === "action_draft.cancel") return "取消草稿";
   return action;
+}
+
+function ExecutionRecord({ execution, loading, onVerify }: { execution: ActionExecution; loading: boolean; onVerify: () => void }) {
+  const latest = execution.verification_checks.at(-1);
+  const labels: Record<string, string> = {
+    verified: "验证通过", failed: "验证不通过", unknown: "暂时无法确认",
+    pending: "等待验证", checking: "正在验证", not_applicable: "不适用外部验证"
+  };
+  const status = execution.verification_status;
+  const color = status === "verified" ? "text-success" : status === "failed" ? "text-danger" : "text-muted";
+  const canVerify = execution.write_status !== "running" && execution.write_status !== "failed"
+    && execution.request_json.action !== "send_report" && status !== "checking";
+  return (
+    <div className="mt-4 space-y-2 border-t border-line pt-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className={`font-medium ${color}`}>{labels[status] || status}</span>
+        {canVerify && <button className="rounded-md border border-line px-3 py-1.5 text-xs text-content disabled:opacity-60" disabled={loading} onClick={onVerify}>仅重新验证</button>}
+      </div>
+      {latest && <p className="text-content">{latest.message}</p>}
+      {status === "unknown" && <p className="text-xs text-muted">不会自动重复写入 GitHub；重新验证只读取数据。</p>}
+      <p className="break-all text-xs text-muted">执行记录：{execution.id} · {new Date(execution.started_at).toLocaleString("zh-CN")}</p>
+      <details className="rounded-md bg-panel p-3">
+        <summary className="cursor-pointer text-xs text-content">查看请求、预期结果、GitHub 返回值及历次验证依据</summary>
+        <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs text-muted">{JSON.stringify(execution, null, 2)}</pre>
+      </details>
+    </div>
+  );
 }

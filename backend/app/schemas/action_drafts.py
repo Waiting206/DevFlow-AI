@@ -15,6 +15,25 @@ class ActionDraftCreateRequest(BaseModel):
     metadata: dict = Field(default_factory=dict)
 
 
+class ActionExecutionResponse(BaseModel):
+    id: UUID
+    draft_id: UUID
+    repo_id: UUID
+    operator_id: UUID
+    request_json: dict
+    expected_state: dict
+    write_status: str
+    write_result: dict | list | None = None
+    write_error: str | None = None
+    verification_status: str
+    verification_checks: list[dict] = Field(default_factory=list)
+    started_at: datetime
+    write_completed_at: datetime | None = None
+    verified_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class ActionDraftResponse(BaseModel):
     id: UUID
     repo_id: UUID
@@ -26,6 +45,9 @@ class ActionDraftResponse(BaseModel):
     risk_level: str
     status: str
     execution_result: dict | None = None
+    confirmed_by: UUID | None = None
+    executed_at: datetime | None = None
+    execution: ActionExecutionResponse | None = None
     error_message: str | None = None
     metadata: dict = Field(default_factory=dict, alias="meta")
     created_at: datetime

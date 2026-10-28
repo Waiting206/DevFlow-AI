@@ -1,0 +1,51 @@
+{
+  "date": "2026-10-24",
+  "scope": "Evals task lifecycle; full ChatAgent/RAGAS evaluations and Judge rescoring",
+  "configuration": {
+    "eval_job_timeout_seconds": 1800,
+    "ragas_timeout_seconds_default": 120,
+    "cancellation_poll_seconds": 1
+  },
+  "endpoints": {
+    "cancel": "POST /api/evals/{eval_id}/cancel",
+    "rerun": "POST /api/evals/{eval_id}/rerun"
+  },
+  "verification": {
+    "backend": {
+      "command": ".venv/bin/python -m pytest app/tests -q",
+      "passed": 303,
+      "failed": 0,
+      "seconds": 14.56,
+      "new_lifecycle_tests": 15
+    },
+    "frontend_build": {
+      "command": "npm run build",
+      "passed": true,
+      "notes": "Existing hook dependency and Browserslist warnings remain; no Evals build errors."
+    },
+    "frontend_runtime": {
+      "command": "npm run test:runtime",
+      "passed": 7,
+      "failed": 0
+    },
+    "http_integration": "Isolated SQLite with ASGI transport: submit, reject active rerun (409), cancel, rerun as new record, query and cancel again.",
+    "model_calls": "Lifecycle and HTTP tests replace model work with controlled async functions; no additional live model evaluation was submitted."
+  },
+  "runtime_observation": {
+    "eval_id": "029d6d71-8fc6-46ba-9574-aff681edf356",
+    "previous_status": "running",
+    "previous_progress_updated_at": "2026-10-22T09:56:39.349568+00:00",
+    "status_after_backend_restart": "error",
+    "progress_message_after_restart": "评测出错。",
+    "progress_updated_at_after_restart": "2026-10-24T12:17:02.533335+00:00",
+    "health": "ok",
+    "openapi_controls_registered": true,
+    "browser": "localhost:3000/evals, Waiting206/RepoPilot: generic error label, enabled rerun button, no interruption reason or perpetual spinner."
+  },
+  "limitations": [
+    "Single-worker in-process execution; startup recovery requires task ownership/leases before multi-worker deployment.",
+    "Cooperative cancellation cannot revoke already dispatched model requests or forcibly interrupt synchronous CPU computation.",
+    "Rerun retains resolved questions/parameters and suite metadata, but uses current repository knowledge and model settings; no complete environment replay.",
+    "Legacy auto-smoke reruns explicitly regenerate questions when original inputs were not saved."
+  ]
+}
